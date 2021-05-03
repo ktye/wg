@@ -1,6 +1,8 @@
 package module
 
-import "unsafe"
+import (
+	"unsafe"
+)
 
 // M is the linear memory space of the module.
 // Use one of Memory or ImportMemory to create it.
@@ -41,23 +43,19 @@ func SetU64(addr int32, x uint64)  { U64[addr>>3] = x }
 func SetF32(addr int32, x float32) { F32[addr>>2] = x }
 func SetF64(addr int32, x float64) { F64[addr>>3] = x }
 
-// T is the indirect function table. Call need to do a type
-var T []interface{}
-
-func Export(funcs ...interface{}) { exports = append(exports, funcs...) }
+// F is the indirect function table. Call need to do a type
+var F []interface{}
 
 // Functions adds the function arguments to the indirect function table
 // starting at the given offset.
 func Functions(off int, funcs ...interface{}) {
-	if n := off + len(F); n > len(F) {
-		F = append(F, make([]interface{}, len(F)-n)...)
+	if n := off + len(F); n >= len(F) {
+		F = append(F, make([]interface{}, 1+len(F)-n)...)
 	}
 	for i, f := range funcs {
 		F[i+off] = f
 	}
 }
-
-var exports []interface{}
 
 // msl creates slices with underlying shared memory afer updating M.
 func msl() {
