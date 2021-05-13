@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -14,23 +13,22 @@ import (
 
 var fset *token.FileSet
 var info types.Info
+var printast bool
 
-func main() { wg(os.Args[1:]) }
-func wg(args []string) {
-	if len(args) != 1 {
-		panic("args")
-	}
-
+func main() {
+	m := parse(os.Args[1])
+	m.wat(os.Stdout)
+}
+func parse(path string) Module { // file.go or dir
 	var f *ast.File
 	var e error
 	fset = token.NewFileSet()
-	path := args[0]
 	if strings.HasSuffix(path, ".go") {
-		f, e = parser.ParseFile(fset, path, nil, 0)
+		f, e = parser.ParseFile(fset, path, nil, parser.ParseComments)
 		fatal(e)
 	} else {
 		notest := func(f fs.FileInfo) bool { return !strings.HasSuffix(f.Name(), "_test.go") }
-		pkgs, e := parser.ParseDir(fset, path, notest, 0)
+		pkgs, e := parser.ParseDir(fset, path, notest, parser.ParseComments)
 		fatal(e)
 		if len(pkgs) > 1 {
 			panic("multiple packages in " + path)
@@ -49,8 +47,10 @@ func wg(args []string) {
 	_, e = conf.Check("input", fset, []*ast.File{f}, &info)
 	fatal(e)
 
-	ast.Print(fset, f)
-	parse(f)
+	if printast {
+		ast.Print(fset, f)
+	}
+	return parseFile(f)
 }
 func fatal(e error) {
 	if e != nil {
@@ -58,11 +58,11 @@ func fatal(e error) {
 	}
 }
 func position(a ast.Node) string { return fset.Position(a.Pos()).String() }
-func parse(a *ast.File) {
-	f := funcs(a)
-	fmt.Printf("%+v\n", f)
+func parseFile(a *ast.File) (r Module) {
+	r.Funcs = parseFuncs(a)
+	return r
 }
-func funcs(a *ast.File) (r []Func) {
+func parseFuncs(a *ast.File) (r []Func) {
 	for _, d := range a.Decls {
 		if f, o := d.(*ast.FuncDecl); o {
 			r = append(r, parseFunc(f))
@@ -74,15 +74,12 @@ func parseFunc(a *ast.FuncDecl) (f Func) {
 	f.Name = a.Name.Name
 	f.Args = parseArgs(a.Type.Params.List)
 	r := parseArgs(a.Type.Results.List)
-	fmt.Println("R", r)
 	f.Rets = make([]Type, len(r))
 	for i := range r {
 		f.Rets[i] = r[i].Type
 	}
 	f.Body = parseBody(a.Body.List)
-
-	//
-	f.wat(os.Stdout)
+	f.Doc = a.Doc.Text()
 
 	return f
 }
@@ -132,6 +129,8 @@ func parseTypes(a ast.Expr) (names []string, rtype []Type) {
 func parseType(t types.Type, pos string) Type {
 	s := t.Underlying().String()
 	switch s {
+	case "bool":
+		return U32
 	case "int32":
 		return I32
 	case "uint32":
@@ -167,16 +166,28 @@ func parseStmt(st ast.Stmt) Stmt {
 }
 func parseAssign(a *ast.AssignStmt) (r Assign) {
 	for i := range a.Lhs {
-		l, o := a.Lhs[i].(*ast.Ident)
-		if o == false {
-			panic(position(a) + ": lhs is not an identifier")
+		switch v := a.Lhs[i].(type) {
+		case *ast.Ident:
+			r.Name = append(r.Name, v.Name)
+		case *ast.SelectorExpr:
+			s := v.X.(*ast.Ident).Name + "_" + v.Sel.Name
+			r.Name = append(r.Name, s)
+		default:
+			panic(position(a) + ": lhs is not an identifier: " + reflect.TypeOf(v).String())
 		}
-		r.Name = append(r.Name, l.Name)
 	}
 	for i := range a.Rhs {
 		r.Expr = append(r.Expr, parseExpr(a.Rhs[i]))
 	}
+	r.Type = parseType(info.TypeOf(a.Rhs[0]), position(a))
+	r.Mod = a.Tok.String()
 	return r
+}
+func parseLiteral(a *ast.BasicLit) (r Literal) {
+	return Literal{
+		Type:  parseType(info.TypeOf(a), position(a)),
+		Value: a.Value,
+	}
 }
 func parseReturn(a *ast.ReturnStmt) (r Return) {
 	r = make(Return, len(a.Results))
@@ -185,8 +196,36 @@ func parseReturn(a *ast.ReturnStmt) (r Return) {
 	}
 	return r
 }
+func parseCall(a *ast.CallExpr) Expr {
+	if id, o := a.Fun.(*ast.Ident); o && id.Obj.Kind == ast.Typ {
+		rid := a.Args[0].(*ast.Ident)
+		p := position(a)
+		if parseType(info.TypeOf(a), p) == parseType(info.TypeOf(rid), p) {
+			return parseIdent(rid)
+		} else {
+			panic("cast..")
+		}
+	}
+	panic("call-expr..")
+}
+func parseIdent(a *ast.Ident) Expr {
+	if st, o := info.TypeOf(a).Underlying().(*types.Struct); o {
+		var names []string
+		for i := 0; i < st.NumFields(); i++ {
+			x := st.Field(i)
+			names = append(names, a.Name+"_"+x.Name())
+		}
+		return LocalGets(names)
+	}
+	return LocalGet(a.Name) //..
+}
 func parseExpr(a ast.Expr) Expr {
 	switch v := a.(type) {
+	case *ast.UnaryExpr:
+		return Unary{
+			X:  parseExpr(v.X),
+			Op: Op{Name: v.Op.String(), Type: parseType(info.TypeOf(v.X), position(v))},
+		}
 	case *ast.BinaryExpr:
 		return Binary{
 			X:  parseExpr(v.X),
@@ -194,7 +233,11 @@ func parseExpr(a ast.Expr) Expr {
 			Op: Op{Name: v.Op.String(), Type: parseType(info.TypeOf(v.X), position(v))},
 		}
 	case *ast.Ident:
-		return LocalGet(v.Name)
+		return parseIdent(v)
+	case *ast.BasicLit:
+		return parseLiteral(v)
+	case *ast.CallExpr:
+		return parseCall(v)
 	default:
 		panic(position(a) + ": unknown expr: " + reflect.TypeOf(a).String())
 	}
