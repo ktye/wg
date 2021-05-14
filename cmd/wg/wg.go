@@ -57,7 +57,8 @@ func fatal(e error) {
 		panic(e)
 	}
 }
-func position(a ast.Node) string { return fset.Position(a.Pos()).String() }
+func position(a ast.Node) string       { return fset.Position(a.Pos()).String() }
+func reflectType(a interface{}) string { return reflect.TypeOf(a).String() }
 func parseFile(a *ast.File) (r Module) {
 	r.Funcs = parseFuncs(a)
 	return r
@@ -72,7 +73,11 @@ func parseFuncs(a *ast.File) (r []Func) {
 }
 func parseFunc(a *ast.FuncDecl) (f Func) {
 	f.Name = a.Name.Name
-	f.Args = parseArgs(a.Type.Params.List)
+	args := a.Type.Params.List
+	if a.Recv != nil {
+		args = append(a.Recv.List, args...)
+	}
+	f.Args = parseArgs(args)
 	r := parseArgs(a.Type.Results.List)
 	f.Rets = make([]Type, len(r))
 	for i := range r {
@@ -160,8 +165,7 @@ func parseStmt(st ast.Stmt) Stmt {
 	case *ast.ReturnStmt:
 		return parseReturn(v)
 	default:
-		t := reflect.TypeOf(st).String()
-		panic(position(st) + ": unknown statement: " + t)
+		panic(position(st) + ": unknown statement: " + reflectType(st))
 	}
 }
 func parseAssign(a *ast.AssignStmt) (r Assign) {
@@ -170,10 +174,10 @@ func parseAssign(a *ast.AssignStmt) (r Assign) {
 		case *ast.Ident:
 			r.Name = append(r.Name, v.Name)
 		case *ast.SelectorExpr:
-			s := v.X.(*ast.Ident).Name + "_" + v.Sel.Name
-			r.Name = append(r.Name, s)
+			//s := v.X.(*ast.Ident).Name + "_" + v.Sel.Name
+			r.Name = append(r.Name, selectorName(v))
 		default:
-			panic(position(a) + ": lhs is not an identifier: " + reflect.TypeOf(v).String())
+			panic(position(a) + ": lhs is not an identifier: " + reflectType(v))
 		}
 	}
 	for i := range a.Rhs {
@@ -183,6 +187,7 @@ func parseAssign(a *ast.AssignStmt) (r Assign) {
 	r.Mod = a.Tok.String()
 	return r
 }
+func selectorName(a *ast.SelectorExpr) string { return a.X.(*ast.Ident).Name + "_" + a.Sel.Name }
 func parseLiteral(a *ast.BasicLit) (r Literal) {
 	return Literal{
 		Type:  parseType(info.TypeOf(a), position(a)),
@@ -197,11 +202,20 @@ func parseReturn(a *ast.ReturnStmt) (r Return) {
 	return r
 }
 func parseCall(a *ast.CallExpr) Expr {
-	if id, o := a.Fun.(*ast.Ident); o && id.Obj.Kind == ast.Typ {
-		rid := a.Args[0].(*ast.Ident)
+	if id, o := a.Fun.(*ast.Ident); o && (id.Obj == nil || id.Obj.Kind == ast.Typ) {
+		arg := a.Args[0]
 		p := position(a)
-		if parseType(info.TypeOf(a), p) == parseType(info.TypeOf(rid), p) {
-			return parseIdent(rid)
+		ltype := parseType(info.TypeOf(a), p)
+		rtype := parseType(info.TypeOf(a), p)
+		if ltype == rtype {
+			switch v := arg.(type) {
+			case *ast.Ident:
+				return parseIdent(v)
+			case *ast.SelectorExpr:
+				return LocalGet(selectorName(v))
+			default:
+				panic(p + ": " + reflectType(v))
+			}
 		} else {
 			panic("cast..")
 		}
@@ -239,6 +253,6 @@ func parseExpr(a ast.Expr) Expr {
 	case *ast.CallExpr:
 		return parseCall(v)
 	default:
-		panic(position(a) + ": unknown expr: " + reflect.TypeOf(a).String())
+		panic(position(a) + ": unknown expr: " + reflectType(a))
 	}
 }

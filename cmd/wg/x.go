@@ -41,3 +41,7 @@ func structfn(s st, y int64, z float64) st {
 	s.b *= z
 	return s
 }
+
+// (func $method (param $s_a i64) (param $s_b f64) (param $y i64) (result i64)
+// local.get $s_a local.get $y i64.div_s)
+func (s st) method(y int64) int64 { return int64(s.a) / y }
