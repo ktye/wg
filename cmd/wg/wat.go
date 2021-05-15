@@ -131,7 +131,7 @@ func (c CallIndirect) wat(w io.Writer) {
 func (c Call) call(w io.Writer) {
 	var op string
 	switch c.Func {
-	// load
+	// load (missing: i64.load{8,16,32}_[su])
 	case "I8", "U8", "I16", "U16":
 		sign := 's'
 		if c.Func[0] == 'U' {
@@ -243,4 +243,8 @@ func init() {
 		"f32<-i32": "f32.convert_i32_s", "f32<-u32": "f32.convert_i32_u", "f32<-i64": "f32.convert_i64_s", "f32<-u64": "f32.convert_i64_u", "f32<-f32": "", "f32<-f64": "f32.demote_f64",
 		"f64<-i32": "f64.convert_i32_s", "f64<-u32": "f64.convert_i32_u", "f64<-i64": "f64.convert_i64_s", "f64<-u64": "f64.convert_i64_u", "f64<-f32": "f64.promote_f32", "f64<-f64": "",
 	}
+	// missing:
+	//   [if]{32,64}.reinterpret_[fi]{32,64}
+	//   i{32,64}.extend_{8,16}_s
+	//   i{32,64}.trunc_sat_f{32,64}_[su]
 }
