@@ -6,6 +6,7 @@ import (
 	. "github.com/ktye/wg/module"
 )
 
+// Init sets up the module. The function is not compiled to wasm.
 func init() {
 	Memory(1)
 	Functions(0, Add, dup)
@@ -129,6 +130,13 @@ func locals(x int32) int32 {
 	return a
 }
 
+// (func $varassign (param $x i32) (result i32) (local $y i32)
+// i32.const 3 local.set $y local.get $x local.get $y i32.add return)
+func varassign(x int32) int32 {
+	var y int32 = 3
+	return x + y
+}
+
 // (func $localstruct (param $x i64) (result i32) (result i64)
 // (local $s.st1.a i32) (local $s.a i64)
 // local.get $x local.set $s.a local.get $s.st1.a local.get $s.a return)
@@ -138,9 +146,6 @@ func localstruct(x int64) st2 {
 	return s
 }
 
-// (func $varassign (param $x i32) (result i32) (local $y i32)
-// i32.const 3 local.set $y local.get $x local.get $y i32.add return)
-func varassign(x int32) int32 {
-	var y int32 = 3
-	return x + y
-}
+// (func $get (param $addr i32) (result i32)
+// local.get $addr i32.load local.get $addr i32.load8_s i32.add return)
+func get(addr int32) int32 { return I32(addr) + I8(addr) }

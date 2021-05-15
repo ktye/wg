@@ -10,10 +10,14 @@ func Memory(blocks int) { memory = make([]byte, 64*1024*blocks) }
 
 var memory []byte
 
-func I8(addr int32) int32    { return int32(binary.LittleEndian.Uint16(memory[addr:])) }
-func I16(addr int32) int32   { return int32(binary.LittleEndian.Uint16(memory[addr:])) }
+func I8(addr int32) int32    { return int32(int8(memory[addr])) }
+func U8(addr int32) uint32   { return uint32(memory[addr]) }
+func I16(addr int32) int32   { return int32(int16(binary.LittleEndian.Uint16(memory[addr:]))) }
+func U16(addr int32) uint32  { return uint32(binary.LittleEndian.Uint16(memory[addr:])) }
 func I32(addr int32) int32   { return int32(binary.LittleEndian.Uint16(memory[addr:])) }
-func I64(addr int32) int64   { return int64(binary.LittleEndian.Uint16(memory[addr:])) }
+func U32(addr int32) uint32  { return binary.LittleEndian.Uint32(memory[addr:]) }
+func I64(addr int32) int64   { return int64(binary.LittleEndian.Uint64(memory[addr:])) }
+func U64(addr int32) uint64  { return binary.LittleEndian.Uint64(memory[addr:]) }
 func F32(addr int32) float32 { return math.Float32frombits(binary.LittleEndian.Uint32(memory[addr:])) }
 func F64(addr int32) float64 { return math.Float64frombits(binary.LittleEndian.Uint64(memory[addr:])) }
 
