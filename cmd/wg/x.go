@@ -12,11 +12,8 @@ func init() {
 }
 
 // (func $Add (param $x i32) (param $y i32) (result i32)
-// local.get $x local.get $y i32.add local.set $r local.get $r return)
-func Add(x, y int32) int32 {
-	r := x + y
-	return r
-}
+// local.get $x local.get $y i32.add return)
+func Add(x, y int32) int32 { return x + y }
 
 // (func $niladic)
 func niladic() {}
@@ -113,4 +110,30 @@ type f2 func(int32, int32) int32
 // local.get $y local.get $z local.get $x call_indirect (param i32) (param i32) (result i32) return)
 func indirect(x, y, z int32) int32 {
 	return Func[x].(f2)(y, z)
+}
+
+// (func $locals (param $x i32) (result i32) (local $a i32) (local $b i32)
+// i32.const 0 local.get $x i32.sub local.set $b
+// i32.const 2 local.get $b i32.mul local.set $a local.get $a return)
+func locals(x int32) int32 {
+	var a int32
+	b := -x
+	a = 2 * b
+	return a
+}
+
+// (func $localstruct (param $x i64) (result i32) (result i64)
+// (local $s.st1.a i32) (local $s.a i64)
+// local.get $x local.set $s.a local.get $s.st1.a local.get $s.a return)
+func localstruct(x int64) st2 {
+	var s st2
+	s.a = x
+	return s
+}
+
+// (func $varassign (param $x i32) (result i32) (local $y i32)
+// i32.const 3 local.set $y local.get $x local.get $y i32.add return)
+func varassign(x int32) int32 {
+	var y int32 = 3
+	return x + y
 }

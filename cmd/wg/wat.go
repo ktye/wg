@@ -34,6 +34,9 @@ func (f Func) wat(w io.Writer) {
 	for _, a := range f.Rets {
 		fmt.Fprintf(w, " (result %s)", a)
 	}
+	for _, a := range f.Locs {
+		fmt.Fprintf(w, " (local $%s %s)", a.Name, a.Type)
+	}
 	fmt.Fprintf(w, "\n")
 	for _, st := range f.Body {
 		st.wat(w)
@@ -42,7 +45,7 @@ func (f Func) wat(w io.Writer) {
 }
 
 func (a Assign) wat(w io.Writer) {
-	if a.Mod != "=" && a.Mod != ":=" { // x += y -> x = x + y
+	if a.Mod != "" && a.Mod != "=" && a.Mod != ":=" { // x += y -> x = x + y
 		if len(a.Expr) != 1 || len(a.Name) != 1 {
 			panic("modified assignment multiple lhs/rhs")
 		}

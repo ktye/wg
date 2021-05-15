@@ -78,6 +78,7 @@ func (m *Module) parseFuncs(a *ast.File) (r []Func) {
 	return r
 }
 func (m *Module) parseFunc(a *ast.FuncDecl) (f Func) {
+	m.current = &f
 	f.Name = a.Name.Name
 	args := a.Type.Params.List
 	if a.Recv != nil {
@@ -215,6 +216,8 @@ func (m *Module) parseStmt(st ast.Stmt) Stmt {
 			e = Drop{e}
 		}
 		return e
+	case *ast.DeclStmt:
+		return m.parseDecl(v)
 	default:
 		panic(position(st) + ": unknown statement: " + reflectType(st))
 	}
@@ -228,7 +231,48 @@ func (m *Module) parseAssign(a *ast.AssignStmt) (r Assign) {
 	}
 	r.Type = parseType(info.TypeOf(a.Rhs[0]), position(a))
 	r.Mod = a.Tok.String()
+	if r.Mod == ":=" {
+		for i := range r.Name {
+			// todo: only 1 type?
+			m.current.Locs = append(m.current.Locs, Local{r.Name[i], r.Type})
+		}
+	}
 	return r
+}
+func (m *Module) parseDecl(a *ast.DeclStmt) Stmt {
+	var r Assign
+	d := a.Decl.(*ast.GenDecl)
+	if d.Tok != token.VAR {
+		panic(position(a) + ": expected variable declaration")
+	}
+	if len(d.Specs) > 1 {
+		panic(position(a) + ": multiple specs?")
+	}
+	for _, s := range d.Specs {
+		var names []string
+		v := s.(*ast.ValueSpec)
+		for _, n := range v.Names {
+			sn, st := parseTypes(v.Type)
+			for i := range sn {
+				name := n.Name
+				if sn[i] != "" {
+					name = n.Name + "." + sn[i]
+				}
+				l := Local{name, st[i]}
+				names = append(names, name)
+				m.current.Locs = append(m.current.Locs, l)
+			}
+		}
+		if len(v.Values) > 0 {
+			r.Name = names
+			r.Type = parseType(info.TypeOf(v.Type), position(a)) //?
+			for _, e := range v.Values {
+				r.Expr = append(r.Expr, m.parseExpr(e))
+			}
+			return r // multiple specs?
+		}
+	}
+	return Nop{}
 }
 func varname(a ast.Node) string {
 	switch v := a.(type) {
@@ -340,7 +384,8 @@ func structVars(s string, a types.Type) (names []string) {
 	if st, o := a.(*types.Struct); o {
 		for i := 0; i < st.NumFields(); i++ {
 			f := st.Field(i)
-			names = append(names, s+"."+f.Name())
+			n := structVars(s+"."+f.Name(), f.Type().Underlying())
+			names = append(names, n...)
 		}
 		return names
 	} else {
@@ -367,8 +412,6 @@ func (m *Module) parseExpr(a ast.Expr) Expr {
 		return parseLiteral(v)
 	case *ast.CallExpr:
 		return m.parseCall(v)
-	//case *ast.TypeAssertExpr:
-	//	return m.parseCallIndirect(v)
 	default:
 		panic(position(a) + ": unknown expr: " + reflectType(a))
 	}

@@ -18,9 +18,10 @@ const (
 )
 
 type Module struct {
-	Memory string
-	Funcs  []Func
-	Table  []TableEntries
+	Memory  string
+	Funcs   []Func
+	Table   []TableEntries
+	current *Func
 }
 type TableEntries struct {
 	Off   int
@@ -30,10 +31,15 @@ type Func struct {
 	Name string
 	Args []Arg
 	Rets []Type
+	Locs []Local
 	Body []Stmt
 	Doc  string
 }
 type Arg struct {
+	Name string
+	Type Type
+}
+type Local struct {
 	Name string
 	Type Type
 }
