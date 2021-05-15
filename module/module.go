@@ -1,44 +1,32 @@
 package module
 
 import (
-	"unsafe"
+	"encoding/binary"
+	"math"
 )
 
-// Byte is the linear memory space of the module.
-// Use one of Memory to create it.
-// I16..F64 are slices sharing the same underlying array.
-// Memory can be accessed using the slices with array indexing,
-// or using the corresponding Get/Set functions with byte addresses.
-var Byte []byte
-var I16 []int16
-var I32 []int32
-var I64 []int64
-var U16 []uint16
-var U32 []uint32
-var U64 []uint64
-var F32 []float32
-var F64 []float64
-
 // Memory creates a linear memory with size blocks*64kB.
-func Memory(blocks int) { Byte = make([]byte, 64*1024*blocks); msl() }
+func Memory(blocks int) { memory = make([]byte, 64*1024*blocks) }
 
-func GetI16(addr int32) int16   { return I16[addr>>1] }
-func GetI32(addr int32) int32   { return I32[addr>>2] }
-func GetI64(addr int32) int64   { return I64[addr>>3] }
-func GetU16(addr int32) uint16  { return U16[addr>>1] }
-func GetU32(addr int32) uint32  { return U32[addr>>2] }
-func GetU64(addr int32) uint64  { return U64[addr>>3] }
-func GetF32(addr int32) float32 { return F32[addr>>2] }
-func GetF64(addr int32) float64 { return F64[addr>>3] }
+var memory []byte
 
-func SetI16(addr int32, x int16)   { I16[addr>>1] = x }
-func SetI32(addr int32, x int32)   { I32[addr>>2] = x }
-func SetI64(addr int32, x int64)   { I64[addr>>3] = x }
-func SetU16(addr int32, x uint16)  { U16[addr>>1] = x }
-func SetU32(addr int32, x uint32)  { U32[addr>>2] = x }
-func SetU64(addr int32, x uint64)  { U64[addr>>3] = x }
-func SetF32(addr int32, x float32) { F32[addr>>2] = x }
-func SetF64(addr int32, x float64) { F64[addr>>3] = x }
+func I8(addr int32) int32    { return int32(binary.LittleEndian.Uint16(memory[addr:])) }
+func I16(addr int32) int32   { return int32(binary.LittleEndian.Uint16(memory[addr:])) }
+func I32(addr int32) int32   { return int32(binary.LittleEndian.Uint16(memory[addr:])) }
+func I64(addr int32) int64   { return int64(binary.LittleEndian.Uint16(memory[addr:])) }
+func F32(addr int32) float32 { return math.Float32frombits(binary.LittleEndian.Uint32(memory[addr:])) }
+func F64(addr int32) float64 { return math.Float64frombits(binary.LittleEndian.Uint64(memory[addr:])) }
+
+func SetI8(addr int32, value int32)  { memory[addr] = byte(value) }
+func SetI16(addr int32, value int32) { binary.LittleEndian.PutUint16(memory[addr:], uint16(value)) }
+func SetI32(addr int32, value int32) { binary.LittleEndian.PutUint32(memory[addr:], uint32(value)) }
+func SetI64(addr int32, value int64) { binary.LittleEndian.PutUint64(memory[addr:], uint64(value)) }
+func SetF32(addr int32, value float32) {
+	binary.LittleEndian.PutUint32(memory[addr:], math.Float32bits(value))
+}
+func SetF64(addr int32, value float64) {
+	binary.LittleEndian.PutUint64(memory[addr:], math.Float64bits(value))
+}
 
 // Func is the indirect function table. Calling needs to do a type assertion.
 var Func []interface{}
@@ -52,37 +40,4 @@ func Functions(off int, funcs ...interface{}) {
 	for i, f := range funcs {
 		Func[i+off] = f
 	}
-}
-
-// msl creates slices with underlying shared memory afer updating M.
-func msl() {
-	type slice struct {
-		p uintptr
-		l int
-		c int
-	}
-	m := *(*slice)(unsafe.Pointer(&Byte))
-	i16 := *(*slice)(unsafe.Pointer(&I16))
-	i32 := *(*slice)(unsafe.Pointer(&I32))
-	i64 := *(*slice)(unsafe.Pointer(&I64))
-	u16 := *(*slice)(unsafe.Pointer(&U16))
-	u32 := *(*slice)(unsafe.Pointer(&U32))
-	u64 := *(*slice)(unsafe.Pointer(&U64))
-	f32 := *(*slice)(unsafe.Pointer(&F32))
-	f64 := *(*slice)(unsafe.Pointer(&F64))
-	i16.l, i16.c, i16.p = m.l/2, m.c/2, m.p
-	i32.l, i32.c, i32.p = m.l/4, m.c/4, m.p
-	i64.l, i64.c, i64.p = m.l/8, m.c/8, m.p
-	u32.l, u32.c, u32.p = m.l/4, m.c/4, m.p
-	u64.l, u64.c, u64.p = m.l/8, m.c/8, m.p
-	f32.l, f32.c, f32.p = m.l/4, m.c/4, m.p
-	f64.l, f64.c, f64.p = m.l/8, m.c/8, m.p
-	I16 = *(*[]int16)(unsafe.Pointer(&i16))
-	I32 = *(*[]int32)(unsafe.Pointer(&i32))
-	I64 = *(*[]int64)(unsafe.Pointer(&i64))
-	U16 = *(*[]uint16)(unsafe.Pointer(&u16))
-	U32 = *(*[]uint32)(unsafe.Pointer(&u32))
-	U64 = *(*[]uint64)(unsafe.Pointer(&u64))
-	F32 = *(*[]float32)(unsafe.Pointer(&f32))
-	F64 = *(*[]float64)(unsafe.Pointer(&f64))
 }
