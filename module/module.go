@@ -4,12 +4,12 @@ import (
 	"unsafe"
 )
 
-// M is the linear memory space of the module.
-// Use one of Memory or ImportMemory to create it.
+// Byte is the linear memory space of the module.
+// Use one of Memory to create it.
 // I16..F64 are slices sharing the same underlying array.
 // Memory can be accessed using the slices with array indexing,
 // or using the corresponding Get/Set functions with byte addresses.
-var M []byte
+var Byte []byte
 var I16 []int16
 var I32 []int32
 var I64 []int64
@@ -20,10 +20,7 @@ var F32 []float32
 var F64 []float64
 
 // Memory creates a linear memory with size blocks*64kB.
-func Memory(blocks int) { M = make([]byte, 64*1024*blocks); msl() }
-
-// ImportMemory uses the provided memory at the modules linear memory.
-func ImportMemory(m []byte) { M = m }
+func Memory(blocks int) { Byte = make([]byte, 64*1024*blocks); msl() }
 
 func GetI16(addr int32) int16   { return I16[addr>>1] }
 func GetI32(addr int32) int32   { return I32[addr>>2] }
@@ -43,17 +40,17 @@ func SetU64(addr int32, x uint64)  { U64[addr>>3] = x }
 func SetF32(addr int32, x float32) { F32[addr>>2] = x }
 func SetF64(addr int32, x float64) { F64[addr>>3] = x }
 
-// F is the indirect function table. Call need to do a type
-var F []interface{}
+// Func is the indirect function table. Calling needs to do a type assertion.
+var Func []interface{}
 
 // Functions adds the function arguments to the indirect function table
 // starting at the given offset.
 func Functions(off int, funcs ...interface{}) {
-	if n := off + len(F); n >= len(F) {
-		F = append(F, make([]interface{}, 1+len(F)-n)...)
+	if n := off + len(Func); n >= len(Func) {
+		Func = append(Func, make([]interface{}, 1+len(Func)-n)...)
 	}
 	for i, f := range funcs {
-		F[i+off] = f
+		Func[i+off] = f
 	}
 }
 
@@ -64,7 +61,7 @@ func msl() {
 		l int
 		c int
 	}
-	m := *(*slice)(unsafe.Pointer(&M))
+	m := *(*slice)(unsafe.Pointer(&Byte))
 	i16 := *(*slice)(unsafe.Pointer(&I16))
 	i32 := *(*slice)(unsafe.Pointer(&I32))
 	i64 := *(*slice)(unsafe.Pointer(&I64))

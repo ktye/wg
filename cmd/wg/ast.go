@@ -18,7 +18,13 @@ const (
 )
 
 type Module struct {
-	Funcs []Func
+	Memory string
+	Funcs  []Func
+	Table  []TableEntries
+}
+type TableEntries struct {
+	Off   int
+	Names []string
 }
 type Func struct {
 	Name string
@@ -39,6 +45,10 @@ type Assign struct { //Stmt
 	Mod  string
 }
 type Return []Expr //Stmt
+type Drop struct {
+	Expr
+}
+type Nop struct{}
 type Expr Emitter
 type Unary struct { //Expr
 	X  Expr
@@ -61,4 +71,10 @@ type Op struct {
 type Call struct { //Expr
 	Func string
 	Args []Expr
+}
+type CallIndirect struct {
+	Func    Expr
+	Args    []Expr
+	ArgType []Type
+	ResType []Type
 }

@@ -2,12 +2,35 @@
 
 package x
 
+import (
+	. "github.com/ktye/wg/module"
+)
+
+func init() {
+	Memory(1)
+	Functions(0, Add, dup)
+}
+
 // (func $Add (param $x i32) (param $y i32) (result i32)
 // local.get $x local.get $y i32.add local.set $r local.get $r return)
 func Add(x, y int32) int32 {
 	r := x + y
 	return r
 }
+
+// (func $niladic)
+func niladic() {}
+
+// (func $dup (param $x i32) (result i32) (result i32)
+// local.get $x local.get $x return)
+func dup(x int32) (int32, int32) { return x, x }
+
+// (func $ignore (param $x i32)
+// local.get $x call $dup drop drop)
+func ignore(x int32) { dup(x) }
+
+// (func $statements call $niladic call $niladic)
+func statements() { niladic(); niladic() }
 
 // (func $rel (param $x i32) (param $y i32) (result u32)
 // local.get $x i32.const 0 i32.gt_s local.get $y
@@ -83,3 +106,11 @@ func callinner1(s st2) int32 { return s.st1.method1() }
 // local.get $s.st1.a call $st1.method1 return)
 func callinner2(s st2) int32 { return s.method1() }
 */
+
+type f2 func(int32, int32) int32
+
+// (func $indirect (param $x i32) (param $y i32) (param $z i32) (result i32)
+// local.get $y local.get $z local.get $x call_indirect (param i32) (param i32) (result i32) return)
+func indirect(x, y, z int32) int32 {
+	return Func[x].(f2)(y, z)
+}

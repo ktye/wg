@@ -32,7 +32,7 @@ type f2 = func(float64, float64) float64
 func reduce(f, x, n int32) float64 {
 	r := F64[x]
 	for _, v := range F64[1+x : n+x] {
-		r = F[f].(f2)(r, v)
+		r = Func[f].(f2)(r, v)
 	}
 	return r
 }

@@ -10,8 +10,18 @@ import (
 
 func (m Module) wat(w io.Writer) {
 	fmt.Fprintf(w, "(module\n")
+	if m.Memory != "" {
+		fmt.Fprintf(w, "(memory (export \"memory\") %s)\n", m.Memory)
+	}
 	for _, f := range m.Funcs {
 		f.wat(w)
+	}
+	for _, e := range m.Table {
+		fmt.Fprintf(w, "(elem (i32.const %d) func", e.Off)
+		for i := range e.Names {
+			fmt.Fprintf(w, " $%s", e.Names[i])
+		}
+		fmt.Fprintf(w, ")\n")
 	}
 	fmt.Fprintf(w, ")\n")
 }
@@ -55,6 +65,11 @@ func (r Return) wat(w io.Writer) {
 	}
 	fmt.Fprintln(w, "return")
 }
+func (r Drop) wat(w io.Writer) {
+	r.Expr.wat(w)
+	fmt.Fprintln(w, "drop")
+}
+func (n Nop) wat(w io.Writer)      {}
 func (l LocalGet) wat(w io.Writer) { fmt.Fprintf(w, "local.get $%s\n", l) }
 func (l LocalGets) wat(w io.Writer) {
 	for i := range l {
@@ -95,6 +110,20 @@ func (c Call) wat(w io.Writer) {
 		c.Args[i].wat(w)
 	}
 	fmt.Fprintf(w, "call $%s\n", c.Func)
+}
+func (c CallIndirect) wat(w io.Writer) {
+	for i := range c.Args {
+		c.Args[i].wat(w)
+	}
+	c.Func.wat(w)
+	fmt.Fprintf(w, "call_indirect")
+	for _, t := range c.ArgType {
+		fmt.Fprintf(w, " (param %s)", t)
+	}
+	for _, t := range c.ResType {
+		fmt.Fprintf(w, " (result %s)", t)
+	}
+	fmt.Fprintln(w)
 }
 
 var wasmops map[string]string
