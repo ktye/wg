@@ -70,6 +70,13 @@ func (s st) method(y int64) int64 { return int64(s.a) / y }
 // local.get $x call $negf return)
 func call(x float32) float32 { return negf(x) }
 
+// (func $retval (param $x i32) (result i32) (local $r i32)
+// i32.const 1 local.get $x i32.add local.set $r local.get $r return)
+func retval(x int32) (r int32) {
+	r = 1 + x
+	return r
+}
+
 // embed
 type st1 struct {
 	a int32

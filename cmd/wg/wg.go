@@ -92,6 +92,9 @@ func (m *Module) parseFunc(a *ast.FuncDecl) (f Func) {
 		f.Rets = make([]Type, len(r))
 		for i := range r {
 			f.Rets[i] = r[i].Type
+			if n := r[i].Name; n != "" && strings.HasPrefix(n, ".") == false {
+				f.Locs = append(f.Locs, Local{n, r[i].Type})
+			}
 		}
 	}
 	f.Body = m.parseBody(a.Body.List)
