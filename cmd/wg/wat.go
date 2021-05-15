@@ -131,27 +131,43 @@ func (c CallIndirect) wat(w io.Writer) {
 func (c Call) call(w io.Writer) {
 	var op string
 	switch c.Func {
+	// load
 	case "I8", "U8", "I16", "U16":
 		sign := 's'
 		if c.Func[0] == 'U' {
 			sign = 'u'
 		}
-		op = fmt.Sprintf("i32.load%s_%c\n", c.Func[1:], sign)
+		op = fmt.Sprintf("i32.load%s_%c", c.Func[1:], sign)
 	case "I32", "U32", "I64", "U64":
-		op = fmt.Sprintf("i%s.load\n", c.Func[1:])
+		op = fmt.Sprintf("i%s.load", c.Func[1:])
 	case "F32", "F64":
-		op = fmt.Sprintf("f%s.load\n", c.Func[1:])
+		op = fmt.Sprintf("f%s.load", c.Func[1:])
+
+	// store
 	case "SetI8", "SetI16":
-		op = fmt.Sprintf("i32.store%s\n", c.Func[4:])
+		op = fmt.Sprintf("i32.store%s", c.Func[4:])
 	case "SetI32", "SetI64", "SetF32", "SetF64":
-		op = fmt.Sprintf("%c%s.store\n", c.Func[3]+32, c.Func[4:])
+		op = fmt.Sprintf("%c%s.store", c.Func[3]+32, c.Func[4:])
+
 	default: // normal function call
 		fmt.Fprintf(w, "call $%s\n", c.Func)
 		return
 	}
-	w.Write([]byte(op))
+	w.Write([]byte(op + "\n"))
+}
+func (c Cast) wat(w io.Writer) {
+	c.Arg.wat(w)
+	cnv := string(c.Dst + "<-" + c.Src)
+	cst, o := wasmcst[cnv]
+	if o == false {
+		panic("unknown type conversion: " + cnv)
+	}
+	if cst != "" {
+		fmt.Fprintln(w, cst)
+	}
 }
 
+var wasmcst map[string]string
 var wasmops map[string]string
 
 func init() {
@@ -217,5 +233,14 @@ func init() {
 				wasmops["f64"+a] = "f64." + c
 			}
 		}
+	}
+
+	wasmcst = map[string]string{
+		"i32<-i32": "", "i32<-u32": "", "i32<-i64": "i32.wrap_i64", "i32<-u64": "i32.wrap_i64", "i32<-f32": "i32.trunc_f32_s", "i32<-f64": "i32.trunc_f64_s",
+		"u32<-i32": "", "u32<-u32": "", "u32<-i64": "i32.wrap_i64", "u32<-u64": "i32.wrap_i64", "u32<-f32": "i32.trunc_f32_u", "u32<-f64": "i32.trunc_f64_u",
+		"i64<-i32": "i64.extend_i32_s", "i64<-u32": "i64.extend_i32_s", "i64<-i64": "", "i64<-u64": "", "i64<-f32": "i64.trunc_f32_s", "i64<-f64": "i64.trunc_f64_s",
+		"u64<-i32": "i64.extend_i32_u", "u64<-u32": "i64.extend_i32_u", "u64<-i64": "", "u64<-u64": "", "u64<-f32": "i64.trunc_f32_u", "u64<-f64": "i64.trunc_f64_u",
+		"f32<-i32": "f32.convert_i32_s", "f32<-u32": "f32.convert_i32_u", "f32<-i64": "f32.convert_i64_s", "f32<-u64": "f32.convert_i64_u", "f32<-f32": "", "f32<-f64": "f32.demote_f64",
+		"f64<-i32": "f64.convert_i32_s", "f64<-u32": "f64.convert_i32_u", "f64<-i64": "f64.convert_i64_s", "f64<-u64": "f64.convert_i64_u", "f64<-f32": "f64.promote_f32", "f64<-f64": "",
 	}
 }

@@ -301,22 +301,32 @@ func (m *Module) parseReturn(a *ast.ReturnStmt) (r Return) {
 	return r
 }
 func (m *Module) parseCall(a *ast.CallExpr) Expr {
-	if _, o := info.TypeOf(a.Fun).Underlying().(*types.Basic); o { //cast
-		arg := a.Args[0]
+	if t, o := info.TypeOf(a.Fun).Underlying().(*types.Basic); o { //cast
 		p := position(a)
-		ltype := parseType(info.TypeOf(a), p)
-		rtype := parseType(info.TypeOf(a), p)
-		if ltype == rtype {
-			return LocalGet(varname(arg))
-		} else {
-			panic("cast..")
+		if len(a.Args) != 1 {
+			panic(p + ": expected cast with 1 argument")
 		}
+		arg := a.Args[0]
+		return Cast{Dst: parseType(t, p), Src: parseType(info.TypeOf(arg).Underlying(), p), Arg: m.parseExpr(arg)}
+		/*
+			arg := a.Args[0]
+			p := position(a)
+			ltype := parseType(info.TypeOf(a), p)
+			rtype := parseType(info.TypeOf(a), p)
+			if ltype == rtype {
+				return LocalGet(varname(arg))
+			} else {
+				panic("cast..")
+			}
+		*/
 	}
 	if ic, o := a.Fun.(*ast.TypeAssertExpr); o {
 		return m.parseCallIndirect(ic, a.Args)
 	}
-	var args []Expr
 	name := varname(a.Fun)
+
+	var args []Expr
+	//name := varname(a.Fun)
 	switch name {
 	case "Memory": // module.Memory(1)
 		l := a.Args[0].(*ast.BasicLit)

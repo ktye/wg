@@ -78,6 +78,10 @@ type Call struct { //Expr
 	Func string
 	Args []Expr
 }
+type Cast struct {
+	Dst, Src Type
+	Arg      Expr
+}
 type CallIndirect struct {
 	Func    Expr
 	Args    []Expr
