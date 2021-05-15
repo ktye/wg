@@ -146,6 +146,12 @@ func localstruct(x int64) st2 {
 	return s
 }
 
-// (func $get (param $addr i32) (result i32)
+// (func $load (param $addr i32) (result i32)
 // local.get $addr i32.load local.get $addr i32.load8_s i32.add return)
-func get(addr int32) int32 { return I32(addr) + I8(addr) }
+func load(addr int32) int32 { return I32(addr) + I8(addr) }
+
+// (func $store (param $addr i32) (param $x i32)
+// local.get $addr local.get $x i32.store)
+func store(addr int32, x int32) {
+	SetI32(addr, x)
+}

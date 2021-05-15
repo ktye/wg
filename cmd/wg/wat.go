@@ -109,13 +109,10 @@ func (l Literal) wat(w io.Writer) {
 	fmt.Fprintf(w, "%s.const %s\n", l.Type, l.Value)
 }
 func (c Call) wat(w io.Writer) {
-	if c.Load(w) {
-		return
-	}
 	for i := range c.Args {
 		c.Args[i].wat(w)
 	}
-	fmt.Fprintf(w, "call $%s\n", c.Func)
+	c.call(w)
 }
 func (c CallIndirect) wat(w io.Writer) {
 	for i := range c.Args {
@@ -131,25 +128,28 @@ func (c CallIndirect) wat(w io.Writer) {
 	}
 	fmt.Fprintln(w)
 }
-func (c Call) Load(w io.Writer) bool {
-	var load string
+func (c Call) call(w io.Writer) {
+	var op string
 	switch c.Func {
 	case "I8", "U8", "I16", "U16":
 		sign := 's'
 		if c.Func[0] == 'U' {
 			sign = 'u'
 		}
-		load = fmt.Sprintf("i32.load%s_%c\n", c.Func[1:], sign)
+		op = fmt.Sprintf("i32.load%s_%c\n", c.Func[1:], sign)
 	case "I32", "U32", "I64", "U64":
-		load = fmt.Sprintf("i%s.load\n", c.Func[1:])
+		op = fmt.Sprintf("i%s.load\n", c.Func[1:])
 	case "F32", "F64":
-		load = fmt.Sprintf("f%s.load\n", c.Func[1:])
-	default:
-		return false // normal function call
+		op = fmt.Sprintf("f%s.load\n", c.Func[1:])
+	case "SetI8", "SetI16":
+		op = fmt.Sprintf("i32.store%s\n", c.Func[4:])
+	case "SetI32", "SetI64", "SetF32", "SetF64":
+		op = fmt.Sprintf("%c%s.store\n", c.Func[3]+32, c.Func[4:])
+	default: // normal function call
+		fmt.Fprintf(w, "call $%s\n", c.Func)
+		return
 	}
-	c.Args[0].wat(w)
-	w.Write([]byte(load))
-	return true
+	w.Write([]byte(op))
 }
 
 var wasmops map[string]string
