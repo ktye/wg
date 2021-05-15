@@ -53,6 +53,7 @@ func (r Return) wat(w io.Writer) {
 	for _, e := range r {
 		e.wat(w)
 	}
+	fmt.Fprintln(w, "return")
 }
 func (l LocalGet) wat(w io.Writer) { fmt.Fprintf(w, "local.get $%s\n", l) }
 func (l LocalGets) wat(w io.Writer) {
@@ -88,6 +89,12 @@ func (b Binary) wat(w io.Writer) {
 }
 func (l Literal) wat(w io.Writer) {
 	fmt.Fprintf(w, "%s.const %s\n", l.Type, l.Value)
+}
+func (c Call) wat(w io.Writer) {
+	for i := range c.Args {
+		c.Args[i].wat(w)
+	}
+	fmt.Fprintf(w, "call $%s\n", c.Func)
 }
 
 var wasmops map[string]string

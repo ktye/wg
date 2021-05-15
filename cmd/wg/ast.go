@@ -3,6 +3,9 @@ package main
 import "io"
 
 type Type string
+type Emitter interface {
+	wat(io.Writer)
+}
 
 const (
 	V   Type = ""
@@ -55,7 +58,7 @@ type Op struct {
 	Name string
 	Type Type
 }
-
-type Emitter interface {
-	wat(io.Writer)
+type Call struct { //Expr
+	Func string
+	Args []Expr
 }

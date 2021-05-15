@@ -8,7 +8,7 @@ import (
 
 func TestWg(t *testing.T) {
 
-	printast = true
+	//printast = true
 	m := parse("x.go")
 
 	for _, f := range m.Funcs {

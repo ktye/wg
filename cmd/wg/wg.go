@@ -76,12 +76,16 @@ func parseFunc(a *ast.FuncDecl) (f Func) {
 	args := a.Type.Params.List
 	if a.Recv != nil {
 		args = append(a.Recv.List, args...)
+		tn := a.Recv.List[0].Type.(*ast.Ident).Name
+		f.Name = tn + "." + f.Name // method
 	}
 	f.Args = parseArgs(args)
-	r := parseArgs(a.Type.Results.List)
-	f.Rets = make([]Type, len(r))
-	for i := range r {
-		f.Rets[i] = r[i].Type
+	if a.Type.Results != nil {
+		r := parseArgs(a.Type.Results.List)
+		f.Rets = make([]Type, len(r))
+		for i := range r {
+			f.Rets[i] = r[i].Type
+		}
 	}
 	f.Body = parseBody(a.Body.List)
 	f.Doc = a.Doc.Text()
@@ -107,7 +111,7 @@ func parseArgi(a *ast.Field) (r []Arg) {
 		for j := range tn { // expand structs
 			name := names[i]
 			if s := tn[j]; s != "" {
-				name += "_" + s
+				name += "." + s
 			}
 			r = append(r, Arg{name, Type(t[j])})
 		}
@@ -116,20 +120,29 @@ func parseArgi(a *ast.Field) (r []Arg) {
 }
 func parseTypes(a ast.Expr) (names []string, rtype []Type) {
 	pos := position(a)
-	u := info.TypeOf(a).Underlying()
-	switch v := u.(type) {
-	case *types.Basic:
-		return []string{""}, []Type{parseType(u, pos)}
-	case *types.Struct:
-		for i := 0; i < v.NumFields(); i++ {
-			x := v.Field(i)
-			names = append(names, x.Name())
-			rtype = append(rtype, parseType(x.Type(), pos))
+	var f func(string, types.Type) ([]string, []Type)
+	f = func(name string, t types.Type) (names []string, rtype []Type) {
+		switch v := t.(type) {
+		case *types.Basic:
+			return []string{name}, []Type{parseType(t, pos)}
+		case *types.Struct:
+			for i := 0; i < v.NumFields(); i++ {
+				x := v.Field(i)
+				n, t := f(x.Name(), x.Type().Underlying())
+				if name != "" {
+					for i := range n {
+						n[i] = name + "." + n[i]
+					}
+				}
+				names = append(names, n...)
+				rtype = append(rtype, t...)
+			}
+			return names, rtype
+		default:
+			panic(position(a) + ": unknown type")
 		}
-		return names, rtype
-	default:
-		panic(position(a) + ": unknown type")
 	}
+	return f("", info.TypeOf(a).Underlying())
 }
 func parseType(t types.Type, pos string) Type {
 	s := t.Underlying().String()
@@ -170,15 +183,7 @@ func parseStmt(st ast.Stmt) Stmt {
 }
 func parseAssign(a *ast.AssignStmt) (r Assign) {
 	for i := range a.Lhs {
-		switch v := a.Lhs[i].(type) {
-		case *ast.Ident:
-			r.Name = append(r.Name, v.Name)
-		case *ast.SelectorExpr:
-			//s := v.X.(*ast.Ident).Name + "_" + v.Sel.Name
-			r.Name = append(r.Name, selectorName(v))
-		default:
-			panic(position(a) + ": lhs is not an identifier: " + reflectType(v))
-		}
+		r.Name = append(r.Name, varname(a.Lhs[i]))
 	}
 	for i := range a.Rhs {
 		r.Expr = append(r.Expr, parseExpr(a.Rhs[i]))
@@ -187,7 +192,16 @@ func parseAssign(a *ast.AssignStmt) (r Assign) {
 	r.Mod = a.Tok.String()
 	return r
 }
-func selectorName(a *ast.SelectorExpr) string { return a.X.(*ast.Ident).Name + "_" + a.Sel.Name }
+func varname(a ast.Node) string {
+	switch v := a.(type) {
+	case *ast.Ident:
+		return v.Name
+	case *ast.SelectorExpr:
+		return varname(v.X) + "." + v.Sel.Name
+	default:
+		panic(position(a) + ": unknown variable node: " + reflectType(a))
+	}
+}
 func parseLiteral(a *ast.BasicLit) (r Literal) {
 	return Literal{
 		Type:  parseType(info.TypeOf(a), position(a)),
@@ -208,31 +222,61 @@ func parseCall(a *ast.CallExpr) Expr {
 		ltype := parseType(info.TypeOf(a), p)
 		rtype := parseType(info.TypeOf(a), p)
 		if ltype == rtype {
-			switch v := arg.(type) {
-			case *ast.Ident:
-				return parseIdent(v)
-			case *ast.SelectorExpr:
-				return LocalGet(selectorName(v))
-			default:
-				panic(p + ": " + reflectType(v))
-			}
+			return LocalGet(varname(arg))
 		} else {
 			panic("cast..")
 		}
 	}
-	panic("call-expr..")
-}
-func parseIdent(a *ast.Ident) Expr {
-	if st, o := info.TypeOf(a).Underlying().(*types.Struct); o {
-		var names []string
-		for i := 0; i < st.NumFields(); i++ {
-			x := st.Field(i)
-			names = append(names, a.Name+"_"+x.Name())
-		}
-		return LocalGets(names)
+	var args []Expr
+	name := varname(a.Fun)
+	if s, o := a.Fun.(*ast.SelectorExpr); o { //method receiver
+		name = strings.TrimPrefix(info.TypeOf(s.X).String(), "input.")
+		name += "." + s.Sel.Name
+		args = append(args, parseGets(s.X))
 	}
-	return LocalGet(a.Name) //..
+	for i := range a.Args {
+		args = append(args, parseExpr(a.Args[i]))
+	}
+	return Call{Func: name, Args: args}
 }
+func parseIdent(a ast.Node) string { // x or x.a or x.a.b
+	switch v := a.(type) {
+	case *ast.Ident:
+		return v.Name
+	case *ast.SelectorExpr:
+		return parseIdent(v.X) + "." + v.Sel.Name
+	default:
+		panic(position(a) + ": unknown type: " + reflectType(a))
+	}
+}
+func parseIdents(a ast.Node) (r []string) { // x(maybe struct) x.a.b(maybe embedded)
+	switch v := a.(type) {
+	case *ast.Ident:
+		if info.TypeOf(v) == nil {
+			return []string{v.Name}
+		}
+		return structVars(v.Name, info.TypeOf(v).Underlying())
+	case *ast.SelectorExpr:
+		t := info.TypeOf(v).Underlying()
+		p := parseIdent(v.X) + "." + v.Sel.Name
+		r = structVars(p, t)
+		return r
+	default:
+		panic(position(a) + ": unknown type: " + reflectType(a))
+	}
+}
+func structVars(s string, a types.Type) (names []string) {
+	if st, o := a.(*types.Struct); o {
+		for i := 0; i < st.NumFields(); i++ {
+			f := st.Field(i)
+			names = append(names, s+"."+f.Name())
+		}
+		return names
+	} else {
+		return []string{s}
+	}
+}
+func parseGets(a ast.Node) Expr { return LocalGets(parseIdents(a)) }
 func parseExpr(a ast.Expr) Expr {
 	switch v := a.(type) {
 	case *ast.UnaryExpr:
@@ -246,8 +290,8 @@ func parseExpr(a ast.Expr) Expr {
 			Y:  parseExpr(v.Y),
 			Op: Op{Name: v.Op.String(), Type: parseType(info.TypeOf(v.X), position(v))},
 		}
-	case *ast.Ident:
-		return parseIdent(v)
+	case *ast.Ident, *ast.SelectorExpr:
+		return parseGets(a)
 	case *ast.BasicLit:
 		return parseLiteral(v)
 	case *ast.CallExpr:
