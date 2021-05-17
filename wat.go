@@ -1,6 +1,8 @@
-package main
+package wg
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"strings"
@@ -8,22 +10,36 @@ import (
 
 // convert wg ast to webassembly text format
 
-func (m Module) wat(w io.Writer) {
-	fmt.Fprintf(w, "(module\n")
+func (m Module) Wat(w io.Writer) {
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "(module\n")
 	if m.Memory != "" {
-		fmt.Fprintf(w, "(memory (export \"memory\") %s)\n", m.Memory)
+		fmt.Fprintf(&buf, "(memory (export \"memory\") %s)\n", m.Memory)
 	}
 	for _, f := range m.Funcs {
-		f.wat(w)
+		f.wat(&buf)
 	}
+	tmax := 0
 	for _, e := range m.Table {
-		fmt.Fprintf(w, "(elem (i32.const %d) func", e.Off)
-		for i := range e.Names {
-			fmt.Fprintf(w, " $%s", e.Names[i])
+		if n := e.Off + len(e.Names); n > tmax {
+			tmax = n
 		}
-		fmt.Fprintf(w, ")\n")
 	}
-	fmt.Fprintf(w, ")\n")
+	fmt.Fprintf(&buf, "(table %d funcref)\n", tmax)
+	for _, e := range m.Table {
+		fmt.Fprintf(&buf, "(elem (i32.const %d) func", e.Off)
+		for i := range e.Names {
+			fmt.Fprintf(&buf, " $%s", e.Names[i])
+		}
+		fmt.Fprintf(&buf, ")\n")
+	}
+	fmt.Fprintf(&buf, ")\n")
+	indent(w, buf.Bytes())
+}
+func (s Stmts) wat(w io.Writer) {
+	for _, st := range s {
+		st.wat(w)
+	}
 }
 
 func (f Func) wat(w io.Writer) {
@@ -38,6 +54,12 @@ func (f Func) wat(w io.Writer) {
 		fmt.Fprintf(w, " (local $%s %s)", a.Name, a.Type)
 	}
 	fmt.Fprintf(w, "\n")
+	if len(f.Body) > 0 {
+		if r, o := f.Body[len(f.Body)-1].(Return); o {
+			r.Last = true
+			f.Body[len(f.Body)-1] = r
+		}
+	}
 	for _, st := range f.Body {
 		st.wat(w)
 	}
@@ -63,10 +85,12 @@ func (a Assign) wat(w io.Writer) {
 	}
 }
 func (r Return) wat(w io.Writer) {
-	for _, e := range r {
+	for _, e := range r.List {
 		e.wat(w)
 	}
-	fmt.Fprintln(w, "return")
+	if r.Last == false {
+		fmt.Fprintln(w, "return")
+	}
 }
 func (r Drop) wat(w io.Writer) {
 	r.Expr.wat(w)
@@ -166,6 +190,22 @@ func (c Cast) wat(w io.Writer) {
 		fmt.Fprintln(w, cst)
 	}
 }
+func (i If) wat(w io.Writer) {
+	i.If.wat(w)
+	fmt.Fprintf(w, "(if (then\n")
+	for _, t := range i.Then {
+		t.wat(w)
+	}
+	fmt.Fprintln(w, ")")
+	if i.Else != nil {
+		fmt.Fprintln(w, "(else")
+		for _, e := range i.Else {
+			e.wat(w)
+		}
+		fmt.Fprintln(w, ")")
+	}
+	fmt.Fprintln(w, ")")
+}
 
 var wasmcst map[string]string
 var wasmops map[string]string
@@ -247,4 +287,22 @@ func init() {
 	//   [if]{32,64}.reinterpret_[fi]{32,64}
 	//   i{32,64}.extend_{8,16}_s
 	//   i{32,64}.trunc_sat_f{32,64}_[su]
+}
+
+func indent(ww io.Writer, p []byte) {
+	w := bufio.NewWriter(ww)
+	p = bytes.Replace(p, []byte("\n)"), []byte{')'}, -1)
+	l := 0
+	for _, b := range p {
+		if b == '(' {
+			l++
+		} else if b == ')' {
+			l--
+		}
+		w.WriteByte(b)
+		if b == '\n' {
+			w.WriteString(strings.Repeat(" ", l))
+		}
+	}
+	w.Flush()
 }

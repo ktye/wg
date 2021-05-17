@@ -1,4 +1,4 @@
-package main
+package wg
 
 import "io"
 
@@ -10,9 +10,9 @@ type Emitter interface {
 const (
 	V   Type = ""
 	I32      = "i32"
-	U32      = "u32"
+	U32      = "i32"
 	I64      = "i64"
-	U64      = "u64"
+	U64      = "i64"
 	F32      = "f32"
 	F64      = "f64"
 )
@@ -32,7 +32,7 @@ type Func struct {
 	Args []Arg
 	Rets []Type
 	Locs []Local
-	Body []Stmt
+	Body Stmts
 	Doc  string
 }
 type Arg struct {
@@ -44,13 +44,17 @@ type Local struct {
 	Type Type
 }
 type Stmt Emitter
+type Stmts []Stmt
 type Assign struct { //Stmt
 	Name []string
 	Expr []Expr
 	Type Type
 	Mod  string
 }
-type Return []Expr //Stmt
+type Return struct { //Stmt
+	Last bool
+	List []Expr
+}
 type Drop struct {
 	Expr
 }
@@ -87,4 +91,8 @@ type CallIndirect struct {
 	Args    []Expr
 	ArgType []Type
 	ResType []Type
+}
+type If struct {
+	If         Expr
+	Then, Else Stmts
 }

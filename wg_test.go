@@ -1,4 +1,4 @@
-package main
+package wg
 
 import (
 	"bytes"
@@ -8,8 +8,8 @@ import (
 
 func TestWg(t *testing.T) {
 
-	// printast = true
-	m := parse("x.go")
+	//printast = true
+	m := Parse("x_test.go")
 
 	for _, f := range m.Funcs {
 		var buf bytes.Buffer
