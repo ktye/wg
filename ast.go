@@ -100,3 +100,13 @@ type If struct {
 	If         Expr
 	Then, Else Stmts
 }
+type For struct {
+	Cond  Expr
+	Post  Stmt
+	Body  Stmts
+	Label string
+}
+type Branch struct {
+	Break bool // break|continue
+	Label string
+}

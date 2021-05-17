@@ -227,6 +227,40 @@ func (i If) wat(w io.Writer) {
 	}
 	fmt.Fprintln(w, ")")
 }
+func (f For) wat(w io.Writer) {
+	l1, l2 := "", ""
+	if f.Label != "" {
+		l1, l2 = "$"+f.Label+":1", "$"+f.Label+":2"
+	}
+	fmt.Fprintf(w, "(block %s (loop %s ", l1, l2)
+	if f.Cond != nil {
+		f.Cond.wat(w)
+		fmt.Fprintf(w, "i32.eqz br_if 1\n")
+	}
+	f.Body.wat(w)
+	if f.Post != nil {
+		f.Post.wat(w)
+	}
+	fmt.Fprintln(w, "br 0))")
+}
+func (b Branch) wat(w io.Writer) {
+	// assume for{ if{ break|continue } } => (block(loop(if(then br 1|2))))
+	if b.Label == "" {
+		if b.Break {
+			fmt.Fprintf(w, "br 2\n")
+		} else {
+			fmt.Fprintf(w, "br 1\n")
+		}
+	} else {
+		l := "$" + b.Label
+		if b.Break {
+			l += ":1"
+		} else {
+			l += ":2"
+		}
+		fmt.Fprintf(w, "br %s\n", l)
+	}
+}
 
 var wasmcst map[string]string
 var wasmops map[string]string

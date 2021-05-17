@@ -201,3 +201,74 @@ func ifinit(x int32) int32 {
 	}
 	return x
 }
+
+// (func $while (param $n i32) (result i32) (local $r i32)
+// (block (loop local.get $n i32.const 0 i32.gt_s i32.eqz br_if 1
+// local.get $r i32.const 1 i32.add local.set $r br 0))
+// local.get $r)
+func while(n int32) (r int32) {
+	for n > 0 {
+		r++
+	}
+	return r
+}
+
+// (func $forloop (param $n i32) (result i32) (local $r i32) (local $i i32)
+// i32.const 0 local.set $i (block (loop local.get $i local.get $n i32.lt_s i32.eqz br_if 1
+// local.get $r local.get $i i32.add local.set $r local.get $i i32.const 1 i32.add local.set $i br 0)) local.get $r)
+func forloop(n int32) (r int32) {
+	for i := int32(0); i < n; i++ {
+		r += i
+	}
+	return r
+}
+
+// (func $forbreak (param $n i32) (result i32) (local $r i32)
+// (block (loop local.get $r local.get $n i32.eq (if (then br 2))
+// local.get $r i32.const 1 i32.add local.set $r br 0)) local.get $r)
+func forbreak(n int32) (r int32) {
+	for {
+		if r == n {
+			break
+		}
+		r++
+	}
+	return r
+}
+
+// (func $forcontinue (param $n i32) (result i32) (local $r i32)
+// (block (loop
+// local.get $r i32.const 5 i32.eq (if (then br 1))
+// local.get $r local.get $n i32.gt_s (if (then br 2))
+// local.get $r i32.const 1 i32.add local.set $r br 0)) local.get $r)
+func forcontinue(n int32) (r int32) {
+	for {
+		if r == 5 {
+			continue
+		}
+		if r > n {
+			break
+		}
+		r++
+	}
+	return r
+}
+
+// (func $forlabel (param $n i32) (result i32) (local $r i32) (local $i i32)
+// i32.const 0 local.set $i
+// (block $out:1 (loop $out:2 local.get $i local.get $n i32.lt_s i32.eqz br_if 1
+// (block (loop local.get $r i32.const 5 i32.eq (if (then br $out:1))
+// local.get $r i32.const 1 i32.add local.set $r br 0))
+// local.get $i i32.const 1 i32.add local.set $i br 0)) local.get $r)
+func forlabel(n int32) (r int32) {
+out:
+	for i := int32(0); i < n; i++ {
+		for {
+			if r == 5 {
+				break out
+			}
+			r++
+		}
+	}
+	return r
+}

@@ -228,6 +228,18 @@ func (m *Module) parseStmt(st ast.Stmt) Stmt {
 		return m.parseDecl(v.Decl.(*ast.GenDecl), false)
 	case *ast.IfStmt:
 		return m.parseIf(v)
+	case *ast.ForStmt:
+		return m.parseFor(v, "")
+	case *ast.IncDecStmt:
+		return m.parseIncDec(v)
+	case *ast.BranchStmt:
+		return m.parseBranch(v)
+	case *ast.LabeledStmt:
+		if f, o := v.Stmt.(*ast.ForStmt); o {
+			return m.parseFor(f, v.Label.Name)
+		} else {
+			panic(position(v) + ": labeled statement must be a for loop")
+		}
 	default:
 		panic(position(st) + ": unknown statement: " + reflectType(st))
 	}
@@ -306,6 +318,33 @@ func (m *Module) parseDecl(d *ast.GenDecl, globalscope bool) Stmt {
 	}
 	return Nop{}
 }
+func (m *Module) parseIncDec(a *ast.IncDecStmt) (r Assign) {
+	s := varname(a.X)
+	g := isglobal(a)
+	r.Name = []string{s}
+	r.Glob = []bool{g}
+	if a.Tok == token.INC {
+		r.Mod = "+="
+	} else {
+		r.Mod = "-="
+	}
+	t := parseType(info.TypeOf(a.X), position(a))
+	r.Typs = []Type{t}
+	r.Expr = []Expr{Literal{Type: t, Value: "1"}}
+	return r
+}
+func (m *Module) parseBranch(a *ast.BranchStmt) (r Branch) {
+	switch a.Tok {
+	case token.BREAK, token.CONTINUE:
+		r.Break = a.Tok == token.BREAK
+	default:
+		panic(position(a) + ": unsupported branch statement")
+	}
+	if a.Label != nil {
+		r.Label = a.Label.Name
+	}
+	return r
+}
 func (m *Module) parseIf(a *ast.IfStmt) (r Stmts) {
 	var i If
 	if a.Init != nil {
@@ -322,6 +361,24 @@ func (m *Module) parseIf(a *ast.IfStmt) (r Stmts) {
 		}
 	}
 	return append(r, i)
+}
+func (m *Module) parseFor(a *ast.ForStmt, label string) (r Stmts) {
+	if a.Init != nil {
+		r = append(r, m.parseStmt(a.Init))
+	}
+	var body Stmts
+	for _, st := range a.Body.List {
+		body = append(body, m.parseStmt(st))
+	}
+	var cond Expr
+	if a.Cond != nil {
+		cond = m.parseExpr(a.Cond)
+	}
+	var post Stmt
+	if a.Post != nil {
+		post = m.parseStmt(a.Post)
+	}
+	return append(r, For{Cond: cond, Post: post, Body: body, Label: label})
 }
 func isglobal(a ast.Node) bool {
 	switch v := a.(type) {
