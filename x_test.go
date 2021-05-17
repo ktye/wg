@@ -146,6 +146,21 @@ func localstruct(x int64) st2 {
 	return s
 }
 
+var g int32
+var g2 = int32(0)
+
+// (func $globalasn (param $x i32) global.get $g local.get $x i32.add global.set $g)
+func globalasn(x int32) { g += x }
+
+// (func $globalvar (param $x i32) (result i32) local.get $x global.get $g i32.add)
+func globalvar(x int32) int32 { return x + g }
+
+var St3 st3
+var Ge1, Ge2 = int64(1), int32(3)
+
+// (func $globalstruct (param $x i32) (result i32) local.get $x global.get $St3.b.a i32.add)
+func globalstruct(x int32) int32 { return x + St3.b.a }
+
 // (func $load (param $addr i32) (result i32)
 // local.get $addr i32.load local.get $addr i32.load8_s i32.add)
 func load(addr int32) int32 { return I32(addr) + I8(addr) }

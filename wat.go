@@ -16,6 +16,13 @@ func (m Module) Wat(w io.Writer) {
 	if m.Memory != "" {
 		fmt.Fprintf(&buf, "(memory (export \"memory\") %s)\n", m.Memory)
 	}
+	for _, g := range m.Globals {
+		for i, s := range g.Name {
+			fmt.Fprintf(&buf, "(global $%s (mut %s) (", s, g.Typs[i])
+			g.Expr[i].wat(&buf)
+			fmt.Fprintln(&buf, "))")
+		}
+	}
 	for _, f := range m.Funcs {
 		f.wat(&buf)
 	}
@@ -71,17 +78,25 @@ func (a Assign) wat(w io.Writer) {
 		if len(a.Expr) != 1 || len(a.Name) != 1 {
 			panic("modified assignment multiple lhs/rhs")
 		}
+		var get Expr = LocalGet(a.Name[0])
+		if a.Glob[0] == true {
+			get = GlobalGet(a.Name[0])
+		}
 		a.Expr = []Expr{Binary{
-			X:  LocalGet(a.Name[0]),
+			X:  get,
 			Y:  a.Expr[0],
-			Op: Op{Name: strings.TrimSuffix(a.Mod, "="), Type: a.Type},
+			Op: Op{Name: strings.TrimSuffix(a.Mod, "="), Type: a.Typs[0]},
 		}}
 	}
 	for _, e := range a.Expr {
 		e.wat(w)
 	}
-	for _, n := range a.Name {
-		fmt.Fprintf(w, "local.set $%s\n", n)
+	for i, n := range a.Name {
+		if a.Glob[i] {
+			fmt.Fprintf(w, "global.set $%s\n", n)
+		} else {
+			fmt.Fprintf(w, "local.set $%s\n", n)
+		}
 	}
 }
 func (r Return) wat(w io.Writer) {
@@ -96,7 +111,13 @@ func (r Drop) wat(w io.Writer) {
 	r.Expr.wat(w)
 	fmt.Fprintln(w, "drop")
 }
-func (n Nop) wat(w io.Writer)      {}
+func (n Nop) wat(w io.Writer)       {}
+func (l GlobalGet) wat(w io.Writer) { fmt.Fprintf(w, "global.get $%s\n", l) }
+func (l GlobalGets) wat(w io.Writer) {
+	for i := range l {
+		fmt.Fprintf(w, "global.get $%s\n", l[i])
+	}
+}
 func (l LocalGet) wat(w io.Writer) { fmt.Fprintf(w, "local.get $%s\n", l) }
 func (l LocalGets) wat(w io.Writer) {
 	for i := range l {

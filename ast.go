@@ -19,6 +19,7 @@ const (
 
 type Module struct {
 	Memory  string
+	Globals []Assign
 	Funcs   []Func
 	Table   []TableEntries
 	current *Func
@@ -48,7 +49,8 @@ type Stmts []Stmt
 type Assign struct { //Stmt
 	Name []string
 	Expr []Expr
-	Type Type
+	Glob []bool
+	Typs []Type
 	Mod  string
 }
 type Return struct { //Stmt
@@ -72,8 +74,10 @@ type Literal struct {
 	Type  Type
 	Value string
 }
-type LocalGet string    //Expr
-type LocalGets []string //Expr (struct)
+type GlobalGet string    //Expr
+type GlobalGets []string //Expr
+type LocalGet string     //Expr
+type LocalGets []string  //Expr (struct)
 type Op struct {
 	Name string
 	Type Type

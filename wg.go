@@ -14,6 +14,7 @@ import (
 
 var fset *token.FileSet
 var info types.Info
+var pkg *types.Package
 var printast bool
 
 func Parse(path string) Module { // file.go or dir
@@ -39,10 +40,10 @@ func Parse(path string) Module { // file.go or dir
 	conf.Importer = importer.For("source", nil) // importer.Default()
 	info = types.Info{
 		Types: make(map[ast.Expr]types.TypeAndValue),
-		//Defs:  make(map[*ast.Ident]types.Object),
-		//Uses:  make(map[*ast.Ident]types.Object),
+		Defs:  make(map[*ast.Ident]types.Object),
+		Uses:  make(map[*ast.Ident]types.Object),
 	}
-	_, e = conf.Check("input", fset, []*ast.File{f}, &info)
+	pkg, e = conf.Check("input", fset, []*ast.File{f}, &info)
 	fatal(e)
 
 	if printast {
@@ -58,7 +59,16 @@ func fatal(e error) {
 func position(a ast.Node) string       { return fset.Position(a.Pos()).String() }
 func reflectType(a interface{}) string { return reflect.TypeOf(a).String() }
 func parseFile(a *ast.File) (r Module) {
+	r.Globals = r.parseGlobals(a)
 	r.Funcs = r.parseFuncs(a)
+	return r
+}
+func (m *Module) parseGlobals(a *ast.File) (r []Assign) {
+	for _, d := range a.Decls {
+		if g, o := d.(*ast.GenDecl); o && g.Tok == token.VAR {
+			r = append(r, m.parseDecl(g, true).(Assign))
+		}
+	}
 	return r
 }
 func (m *Module) parseFuncs(a *ast.File) (r []Func) {
@@ -215,7 +225,7 @@ func (m *Module) parseStmt(st ast.Stmt) Stmt {
 		}
 		return e
 	case *ast.DeclStmt:
-		return m.parseDecl(v)
+		return m.parseDecl(v.Decl.(*ast.GenDecl), false)
 	case *ast.IfStmt:
 		return m.parseIf(v)
 	default:
@@ -225,34 +235,42 @@ func (m *Module) parseStmt(st ast.Stmt) Stmt {
 func (m *Module) parseAssign(a *ast.AssignStmt) (r Assign) {
 	for i := range a.Lhs {
 		r.Name = append(r.Name, varname(a.Lhs[i]))
+		r.Glob = append(r.Glob, isglobal(a.Lhs[i]))
 	}
 	for i := range a.Rhs {
 		r.Expr = append(r.Expr, m.parseExpr(a.Rhs[i]))
+		_, t := parseTypes(a.Rhs[i])
+		r.Typs = append(r.Typs, t...)
 	}
-	r.Type = parseType(info.TypeOf(a.Rhs[0]), position(a))
 	r.Mod = a.Tok.String()
 	if r.Mod == ":=" {
 		for i := range r.Name {
-			// todo: only 1 type?
-			m.current.Locs = append(m.current.Locs, Local{r.Name[i], r.Type})
+			m.current.Locs = append(m.current.Locs, Local{r.Name[i], r.Typs[i]})
 		}
 	}
 	return r
 }
-func (m *Module) parseDecl(a *ast.DeclStmt) Stmt {
+func (m *Module) parseDecl(d *ast.GenDecl, globalscope bool) Stmt {
 	var r Assign
-	d := a.Decl.(*ast.GenDecl)
 	if d.Tok != token.VAR {
-		panic(position(a) + ": expected variable declaration")
+		panic(position(d) + ": expected variable declaration")
 	}
 	if len(d.Specs) > 1 {
-		panic(position(a) + ": multiple specs?")
+		panic(position(d) + ": multiple specs?")
 	}
 	for _, s := range d.Specs {
 		var names []string
+		var glob []bool
 		v := s.(*ast.ValueSpec)
-		for _, n := range v.Names {
-			sn, st := parseTypes(v.Type)
+		for i, n := range v.Names {
+			var sn []string
+			var st []Type
+			if v.Type != nil { // var g int32
+				sn, st = parseTypes(v.Type)
+			} else { // var g = int32(1)
+				sn = []string{""}
+				st = []Type{parseType(info.TypeOf(v.Values[i]), position(v.Values[i]))}
+			}
 			for i := range sn {
 				name := n.Name
 				if sn[i] != "" {
@@ -260,16 +278,30 @@ func (m *Module) parseDecl(a *ast.DeclStmt) Stmt {
 				}
 				l := Local{name, st[i]}
 				names = append(names, name)
-				m.current.Locs = append(m.current.Locs, l)
+				if globalscope == false {
+					m.current.Locs = append(m.current.Locs, l)
+				}
 			}
+			g := isglobal(v)
+			for range names {
+				glob = append(glob, g)
+			}
+			r.Typs = append(r.Typs, st...)
 		}
+		r.Name = names
 		if len(v.Values) > 0 {
-			r.Name = names
-			r.Type = parseType(info.TypeOf(v.Type), position(a)) //?
 			for _, e := range v.Values {
 				r.Expr = append(r.Expr, m.parseExpr(e))
 			}
+			r.Glob = glob
 			return r // multiple specs?
+		} else if globalscope {
+			r.Name = names
+			r.Expr = make([]Expr, len(r.Typs))
+			for i, t := range r.Typs {
+				r.Expr[i] = Literal{t, "0"}
+			}
+			return r
 		}
 	}
 	return Nop{}
@@ -290,6 +322,15 @@ func (m *Module) parseIf(a *ast.IfStmt) (r Stmts) {
 		}
 	}
 	return append(r, i)
+}
+func isglobal(a ast.Node) bool {
+	switch v := a.(type) {
+	case *ast.Ident:
+		return info.ObjectOf(v).Parent() == pkg.Scope()
+	case *ast.SelectorExpr:
+		return isglobal(v.X)
+	}
+	return false
 }
 func varname(a ast.Node) string {
 	switch v := a.(type) {
@@ -322,17 +363,6 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 		}
 		arg := a.Args[0]
 		return Cast{Dst: parseType(t, p), Src: parseType(info.TypeOf(arg).Underlying(), p), Arg: m.parseExpr(arg)}
-		/*
-			arg := a.Args[0]
-			p := position(a)
-			ltype := parseType(info.TypeOf(a), p)
-			rtype := parseType(info.TypeOf(a), p)
-			if ltype == rtype {
-				return LocalGet(varname(arg))
-			} else {
-				panic("cast..")
-			}
-		*/
 	}
 	if ic, o := a.Fun.(*ast.TypeAssertExpr); o {
 		return m.parseCallIndirect(ic, a.Args)
@@ -340,7 +370,6 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 	name := varname(a.Fun)
 
 	var args []Expr
-	//name := varname(a.Fun)
 	switch name {
 	case "Memory": // module.Memory(1)
 		l := a.Args[0].(*ast.BasicLit)
@@ -419,7 +448,13 @@ func structVars(s string, a types.Type) (names []string) {
 		return []string{s}
 	}
 }
-func parseGets(a ast.Node) Expr { return LocalGets(parseIdents(a)) }
+func parseGets(a ast.Node) Expr {
+	if isglobal(a) {
+		return GlobalGets(parseIdents(a))
+	} else {
+		return LocalGets(parseIdents(a))
+	}
+}
 func (m *Module) parseExpr(a ast.Expr) Expr {
 	switch v := a.(type) {
 	case *ast.UnaryExpr:
