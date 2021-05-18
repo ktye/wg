@@ -161,6 +161,22 @@ var Ge1, Ge2 = int64(1), int32(3)
 // (func $globalstruct (param $x i32) (result i32) local.get $x global.get $St3.b.a i32.add)
 func globalstruct(x int32) int32 { return x + St3.b.a }
 
+const con = int32(3 << 5)
+
+const (
+	enum I = 1 << iota
+	enum2
+	enum3
+)
+
+// (func $constant (param $x i32) (result i32)
+// local.get $x global.get $con i32.add)
+func constant(x int32) int32 { return x + con }
+
+// (func $enums (result i64)
+// global.get $enum global.get $enum2 i64.add global.get $enum3 i64.add)
+func enums() I { return enum + enum2 + enum3 }
+
 // (func $load (param $addr i32) (result i32)
 // local.get $addr i32.load local.get $addr i32.load8_s i32.add)
 func load(addr int32) int32 { return I32(addr) + I8(addr) }

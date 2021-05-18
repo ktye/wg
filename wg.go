@@ -1,6 +1,7 @@
 package wg
 
 import (
+	"fmt"
 	"go/ast"
 	"go/importer"
 	"go/parser"
@@ -65,8 +66,17 @@ func parseFile(a *ast.File) (r Module) {
 }
 func (m *Module) parseGlobals(a *ast.File) (r []Assign) {
 	for _, d := range a.Decls {
-		if g, o := d.(*ast.GenDecl); o && g.Tok == token.VAR {
-			r = append(r, m.parseDecl(g, true).(Assign))
+		if g, o := d.(*ast.GenDecl); o {
+			if g.Tok == token.VAR || g.Tok == token.CONST {
+				gs := 1
+				if g.Tok == token.CONST {
+					gs = 2
+				}
+				stmts := m.parseDecl(g, gs).(Stmts)
+				for _, st := range stmts {
+					r = append(r, st.(Assign))
+				}
+			}
 		}
 	}
 	return r
@@ -225,7 +235,7 @@ func (m *Module) parseStmt(st ast.Stmt) Stmt {
 		}
 		return e
 	case *ast.DeclStmt:
-		return m.parseDecl(v.Decl.(*ast.GenDecl), false)
+		return m.parseDecl(v.Decl.(*ast.GenDecl), 0)
 	case *ast.IfStmt:
 		return m.parseIf(v)
 	case *ast.ForStmt:
@@ -262,62 +272,75 @@ func (m *Module) parseAssign(a *ast.AssignStmt) (r Assign) {
 	}
 	return r
 }
-func (m *Module) parseDecl(d *ast.GenDecl, globalscope bool) Stmt {
-	var r Assign
-	if d.Tok != token.VAR {
-		panic(position(d) + ": expected variable declaration")
+func (m *Module) parseDecl(d *ast.GenDecl, globalscope int) Stmt {
+	if d.Tok != token.VAR && d.Tok != token.CONST {
+		panic(position(d) + ": expected variable|constant declaration")
 	}
-	if len(d.Specs) > 1 {
-		panic(position(d) + ": multiple specs?")
+	if len(d.Specs) == 0 {
+		return Nop{}
 	}
+	var r Stmts
 	for _, s := range d.Specs {
-		var names []string
-		var glob []bool
-		v := s.(*ast.ValueSpec)
-		for i, n := range v.Names {
-			var sn []string
-			var st []Type
-			if v.Type != nil { // var g int32
-				sn, st = parseTypes(v.Type)
-			} else { // var g = int32(1)
-				sn = []string{""}
-				st = []Type{parseType(info.TypeOf(v.Values[i]), position(v.Values[i]))}
-			}
-			for i := range sn {
-				name := n.Name
-				if sn[i] != "" {
-					name = n.Name + "." + sn[i]
-				}
-				l := Local{name, st[i]}
-				names = append(names, name)
-				if globalscope == false {
-					m.current.Locs = append(m.current.Locs, l)
-				}
-			}
-			g := isglobal(v)
-			for range names {
-				glob = append(glob, g)
-			}
-			r.Typs = append(r.Typs, st...)
+		r = append(r, m.parseDeclSpec(s, globalscope, d.Tok))
+	}
+	return r
+}
+func (m *Module) parseDeclSpec(s ast.Spec, globalscope int, tok token.Token) (r Assign) {
+	var names []string
+	var glob []bool
+	v := s.(*ast.ValueSpec)
+	for i, n := range v.Names {
+		var sn []string
+		var st []Type
+		if v.Type != nil { // var g int32
+			sn, st = parseTypes(v.Type)
+		} else if len(v.Values) > i { // var g = int32(1)
+			sn = []string{""}
+			st = []Type{parseType(info.TypeOf(v.Values[i]), position(v.Values[i]))}
+		} else {
+			sn = []string{""}
+			st = []Type{parseType(info.TypeOf(n), position(n))}
 		}
-		r.Name = names
-		if len(v.Values) > 0 {
-			for _, e := range v.Values {
+		for i := range sn {
+			name := n.Name
+			if sn[i] != "" {
+				name = n.Name + "." + sn[i]
+			}
+			l := Local{name, st[i]}
+			names = append(names, name)
+			if globalscope == 0 {
+				m.current.Locs = append(m.current.Locs, l)
+			}
+			glob = append(glob, isglobal(v))
+		}
+		r.Typs = append(r.Typs, st...)
+	}
+	r.Name = names
+	r.Glob = glob
+	r.Const = make([]bool, len(r.Name))
+	if len(v.Values) > 0 {
+		for i, e := range v.Values {
+			if tok == token.CONST {
+				t := info.Types[e]
+				r.Expr = append(r.Expr, Literal{Type: parseType(t.Type, position(e)), Value: fmt.Sprint(t.Value)})
+				r.Const[i] = true
+			} else {
 				r.Expr = append(r.Expr, m.parseExpr(e))
 			}
-			r.Glob = glob
-			return r // multiple specs?
-		} else if globalscope {
-			r.Name = names
-			r.Expr = make([]Expr, len(r.Typs))
-			for i, t := range r.Typs {
-				r.Expr[i] = Literal{t, "0"}
-			}
-			return r
 		}
+		r.Glob = glob
+		return r // multiple specs?
+	} else if globalscope > 0 {
+		r.Name = names
+		r.Expr = make([]Expr, len(r.Typs))
+		for i, t := range r.Typs {
+			r.Expr[i] = Literal{t, "0"}
+		}
+		return r
 	}
-	return Nop{}
+	return r
 }
+
 func (m *Module) parseIncDec(a *ast.IncDecStmt) (r Assign) {
 	s := varname(a.X)
 	g := isglobal(a)

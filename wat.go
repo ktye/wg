@@ -16,17 +16,21 @@ func (m Module) Wat(ww io.Writer) {
 	}
 	for _, g := range m.Globals {
 		for i, s := range g.Name {
-			var t Type
+			t := g.Typs[i]
 			var u string
 			switch v := g.Expr[i].(type) {
 			case Cast:
-				t, u = v.Dst, v.Arg.(Literal).Value
+				u = v.Arg.(Literal).Value
 			case Literal:
-				t, u = v.Type, v.Value
+				u = v.Value
 			default:
 				panic("global value must be (cast-to) literal")
 			}
-			fmt.Fprintf(w, "(global $%s (mut %s) (%s.const %s))\n", s, g.Typs[i], t, u)
+			mut := string(t)
+			if g.Const[i] == false {
+				mut = "(mut " + string(t) + ")"
+			}
+			fmt.Fprintf(w, "(global $%s %s (%s.const %s))\n", s, mut, t, u)
 		}
 	}
 	for _, f := range m.Funcs {
@@ -97,11 +101,13 @@ func (a Assign) wat(w io.Writer) {
 	for _, e := range a.Expr {
 		e.wat(w)
 	}
-	for i, n := range a.Name {
-		if a.Glob[i] {
-			fmt.Fprintf(w, "global.set $%s\n", n)
-		} else {
-			fmt.Fprintf(w, "local.set $%s\n", n)
+	if a.Expr != nil {
+		for i, n := range a.Name {
+			if a.Glob[i] {
+				fmt.Fprintf(w, "global.set $%s\n", n)
+			} else {
+				fmt.Fprintf(w, "local.set $%s\n", n)
+			}
 		}
 	}
 }

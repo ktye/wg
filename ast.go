@@ -47,11 +47,12 @@ type Local struct {
 type Stmt Emitter
 type Stmts []Stmt
 type Assign struct { //Stmt
-	Name []string
-	Expr []Expr
-	Glob []bool
-	Typs []Type
-	Mod  string
+	Name  []string
+	Expr  []Expr
+	Glob  []bool
+	Const []bool
+	Typs  []Type
+	Mod   string
 }
 type Return struct { //Stmt
 	Last bool
