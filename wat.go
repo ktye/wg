@@ -11,6 +11,9 @@ import (
 func (m Module) Wat(ww io.Writer) {
 	var w = newIndent(ww)
 	fmt.Fprintf(w, "(module\n")
+	for _, i := range m.Imports {
+		i.wat(w)
+	}
 	if m.Memory != "" {
 		fmt.Fprintf(w, "(memory (export \"memory\") %s)\n", m.Memory)
 	}
@@ -58,9 +61,26 @@ func (s Stmts) wat(w io.Writer) {
 		st.wat(w)
 	}
 }
-
+func (m Import) wat(w io.Writer) {
+	//(import "wasi_unstable" "fd_write" (func $fd_write (param i32 i32 i32 i32) (result i32)))
+	arglist := func(t []Type, r string) string {
+		if len(t) == 0 {
+			return ""
+		}
+		for _, s := range t {
+			r += " " + string(s)
+		}
+		return r + ")"
+	}
+	arg := arglist(m.Arg, "(param")
+	res := arglist(m.Res, "(result")
+	fmt.Fprintf(w, "(import \"%s\" \"%s\" (func $%s.%s %s %s))\n", m.Package, m.Func, m.Package, m.Func, arg, res)
+}
 func (f Func) wat(w io.Writer) {
 	fmt.Fprintf(w, "(func $%s", f.Name)
+	if f.Exported {
+		fmt.Fprintf(w, " (export \"%s\")", f.Name)
+	}
 	for _, a := range f.Args {
 		fmt.Fprintf(w, " (param $%s %s)", a.Name, a.Type)
 	}

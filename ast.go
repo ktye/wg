@@ -22,6 +22,8 @@ const (
 
 type Module struct {
 	Memory  string
+	Imports map[string]Import
+	Exports map[string]bool
 	Globals []Assign
 	Funcs   []Func
 	Table   []TableEntries
@@ -32,13 +34,20 @@ type TableEntries struct {
 	Off   int
 	Names []string
 }
+type Import struct {
+	Package string
+	Func    string
+	Arg     []Type
+	Res     []Type
+}
 type Func struct {
-	Name string
-	Args []Arg
-	Rets []Type
-	Locs []Local
-	Body Stmts
-	Doc  string
+	Name     string
+	Args     []Arg
+	Rets     []Type
+	Locs     []Local
+	Body     Stmts
+	Doc      string
+	Exported bool
 }
 type Arg struct {
 	Name string

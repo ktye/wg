@@ -4,12 +4,14 @@ package x
 
 import (
 	. "github.com/ktye/wg/module"
+	"github.com/ktye/wg/wasi_unstable"
 )
 
 // Init sets up the module. The function is not compiled to wasm.
 func init() {
 	Memory(1)
 	Functions(0, Add, dup)
+	Export(dup, ignore)
 }
 
 // (func $Add (param $x i32) (param $y i32) (result i32)
@@ -19,11 +21,11 @@ func Add(x, y int32) int32 { return x + y }
 // (func $niladic)
 func niladic() {}
 
-// (func $dup (param $x i32) (result i32) (result i32)
+// (func $dup (export "dup") (param $x i32) (result i32) (result i32)
 // local.get $x local.get $x)
 func dup(x int32) (int32, int32) { return x, x }
 
-// (func $ignore (param $x i32)
+// (func $ignore (export "ignore") (param $x i32)
 // local.get $x call $dup drop drop)
 func ignore(x int32) { dup(x) }
 
@@ -300,3 +302,7 @@ func scope() int32 {
 	}
 	return i
 }
+
+// (func $wasicall (result i64)
+// i32.const 0 i64.const 0 call $wasi_unstable.clock_time_get)
+func wasicall() wasi_unstable.Timestamp { return wasi_unstable.Clock_time_get(0, 0) }

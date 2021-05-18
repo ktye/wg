@@ -60,6 +60,8 @@ func fatal(e error) {
 func position(a ast.Node) string       { return fset.Position(a.Pos()).String() }
 func reflectType(a interface{}) string { return reflect.TypeOf(a).String() }
 func parseFile(a *ast.File) (r Module) {
+	r.Imports = make(map[string]Import)
+	r.Exports = make(map[string]bool)
 	r.Globals = r.parseGlobals(a)
 	r.Funcs = r.parseFuncs(a)
 	return r
@@ -97,6 +99,7 @@ func (m *Module) parseFuncs(a *ast.File) (r []Func) {
 func (m *Module) parseFunc(a *ast.FuncDecl) (f Func) {
 	m.current = &f
 	f.Name = a.Name.Name
+	f.Exported = m.Exports[f.Name]
 	args := a.Type.Params.List
 	if a.Recv != nil {
 		args = append(a.Recv.List, args...)
@@ -451,10 +454,16 @@ func (m *Module) varname(a ast.Node) string {
 	}
 }
 func parseLiteral(a *ast.BasicLit) (r Literal) {
-	return Literal{
+	r = Literal{
 		Type:  parseType(info.TypeOf(a), position(a)),
 		Value: a.Value,
 	}
+	if strings.HasPrefix(r.Value, "'") {
+		s := r.Value[1 : len(r.Value)-1]
+		v, _, _, _ := strconv.UnquoteChar(s, 39)
+		r.Value = strconv.Itoa(int(v))
+	}
+	return r
 }
 func (m *Module) parseReturn(a *ast.ReturnStmt) (r Return) {
 	r.List = make([]Expr, len(a.Results))
@@ -491,12 +500,31 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 		}
 		m.Table = append(m.Table, TableEntries{off, names})
 		return Nop{}
+	case "Export": // module.Export(f1, f2...)
+		for _, f := range a.Args {
+			m.Exports[f.(*ast.Ident).Name] = true
+		}
+		return Nop{}
 	}
 	if s, o := a.Fun.(*ast.SelectorExpr); o { //method receiver
+		if id, o := s.X.(*ast.Ident); o {
+			obj := info.ObjectOf(id)
+			if p, o := obj.(*types.PkgName); o { //package call, e.g. wasi.Func(..)
+				pkgname := p.Name()
+				b := []byte(name)
+				n := len(pkgname)
+				b[1+n] += 32
+				name = string(b)
+				as, rs := m.parseSignature(a.Fun)
+				m.Imports[name] = Import{pkgname, strings.TrimPrefix(name, pkgname+"."), as, rs}
+				goto args
+			}
+		}
 		name = strings.TrimPrefix(info.TypeOf(s.X).String(), "input.")
 		name += "." + s.Sel.Name
 		args = append(args, m.parseGets(s.X))
 	}
+args:
 	for i := range a.Args {
 		args = append(args, m.parseExpr(a.Args[i]))
 	}
