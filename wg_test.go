@@ -13,7 +13,9 @@ func TestWg(t *testing.T) {
 
 	for _, f := range m.Funcs {
 		var buf bytes.Buffer
-		f.wat(&buf)
+		w := newIndent(&buf)
+		f.wat(w)
+		w.Write(nil)
 		got := trim(string(buf.Bytes()))
 		exp := trim(f.Doc)
 		if got != exp {
@@ -24,8 +26,13 @@ func TestWg(t *testing.T) {
 func trim(s string) string {
 	s = strings.Replace(s, "\n", " ", -1)
 	s = strings.TrimSpace(s)
-	s = strings.Replace(s, "  ", " ", -1)
-	s = strings.Replace(s, "  ", " ", -1)
+	for {
+		n := len(s)
+		s = strings.Replace(s, "  ", " ", -1)
+		if len(s) == n {
+			break
+		}
+	}
 	s = strings.Replace(s, " )", ")", -1)
 	return s
 }

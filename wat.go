@@ -1,8 +1,6 @@
 package wg
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"io"
 	"strings"
@@ -10,21 +8,29 @@ import (
 
 // convert wg ast to webassembly text format
 
-func (m Module) Wat(w io.Writer) {
-	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "(module\n")
+func (m Module) Wat(ww io.Writer) {
+	var w = newIndent(ww)
+	fmt.Fprintf(w, "(module\n")
 	if m.Memory != "" {
-		fmt.Fprintf(&buf, "(memory (export \"memory\") %s)\n", m.Memory)
+		fmt.Fprintf(w, "(memory (export \"memory\") %s)\n", m.Memory)
 	}
 	for _, g := range m.Globals {
 		for i, s := range g.Name {
-			fmt.Fprintf(&buf, "(global $%s (mut %s) (", s, g.Typs[i])
-			g.Expr[i].wat(&buf)
-			fmt.Fprintln(&buf, "))")
+			var t Type
+			var u string
+			switch v := g.Expr[i].(type) {
+			case Cast:
+				t, u = v.Dst, v.Arg.(Literal).Value
+			case Literal:
+				t, u = v.Type, v.Value
+			default:
+				panic("global value must be (cast-to) literal")
+			}
+			fmt.Fprintf(w, "(global $%s (mut %s) (%s.const %s))\n", s, g.Typs[i], t, u)
 		}
 	}
 	for _, f := range m.Funcs {
-		f.wat(&buf)
+		f.wat(w)
 	}
 	tmax := 0
 	for _, e := range m.Table {
@@ -32,16 +38,16 @@ func (m Module) Wat(w io.Writer) {
 			tmax = n
 		}
 	}
-	fmt.Fprintf(&buf, "(table %d funcref)\n", tmax)
+	fmt.Fprintf(w, "(table %d funcref)\n", tmax)
 	for _, e := range m.Table {
-		fmt.Fprintf(&buf, "(elem (i32.const %d) func", e.Off)
+		fmt.Fprintf(w, "(elem (i32.const %d) func", e.Off)
 		for i := range e.Names {
-			fmt.Fprintf(&buf, " $%s", e.Names[i])
+			fmt.Fprintf(w, " $%s", e.Names[i])
 		}
-		fmt.Fprintf(&buf, ")\n")
+		fmt.Fprintf(w, ")\n")
 	}
-	fmt.Fprintf(&buf, ")\n")
-	indent(w, buf.Bytes())
+	fmt.Fprintf(w, ")\n")
+	w.Write(nil)
 }
 func (s Stmts) wat(w io.Writer) {
 	for _, st := range s {
@@ -213,26 +219,25 @@ func (c Cast) wat(w io.Writer) {
 }
 func (i If) wat(w io.Writer) {
 	i.If.wat(w)
-	fmt.Fprintf(w, "(if (then\n")
+	fmt.Fprintln(w, "if")
 	for _, t := range i.Then {
 		t.wat(w)
 	}
-	fmt.Fprintln(w, ")")
 	if i.Else != nil {
-		fmt.Fprintln(w, "(else")
+		fmt.Fprintln(w, "else")
 		for _, e := range i.Else {
 			e.wat(w)
 		}
-		fmt.Fprintln(w, ")")
 	}
-	fmt.Fprintln(w, ")")
+	fmt.Fprintln(w, "end")
 }
 func (f For) wat(w io.Writer) {
 	l1, l2 := "", ""
 	if f.Label != "" {
 		l1, l2 = "$"+f.Label+":1", "$"+f.Label+":2"
 	}
-	fmt.Fprintf(w, "(block %s (loop %s ", l1, l2)
+	fmt.Fprintf(w, "block %s\n", l1)
+	fmt.Fprintf(w, "loop %s\n", l2)
 	if f.Cond != nil {
 		f.Cond.wat(w)
 		fmt.Fprintf(w, "i32.eqz br_if 1\n")
@@ -241,7 +246,9 @@ func (f For) wat(w io.Writer) {
 	if f.Post != nil {
 		f.Post.wat(w)
 	}
-	fmt.Fprintln(w, "br 0))")
+	fmt.Fprintln(w, "br 0")
+	fmt.Fprintln(w, "end")
+	fmt.Fprintln(w, "end")
 }
 func (b Branch) wat(w io.Writer) {
 	// assume for{ if{ break|continue } } => (block(loop(if(then br 1|2))))
@@ -344,20 +351,56 @@ func init() {
 	//   i{32,64}.trunc_sat_f{32,64}_[su]
 }
 
-func indent(ww io.Writer, p []byte) {
-	w := bufio.NewWriter(ww)
-	p = bytes.Replace(p, []byte("\n)"), []byte{')'}, -1)
-	l := 0
-	for _, b := range p {
-		if b == '(' {
-			l++
-		} else if b == ')' {
-			l--
+type indent struct {
+	io.Writer
+	l int
+	s string
+}
+
+func newIndent(w io.Writer) *indent {
+	i := indent{Writer: w}
+	return &i
+}
+func (w *indent) Write(p []byte) (n int, err error) {
+	s := string(p)
+
+	w.s, s = tee(w.s, s)
+	if strings.HasSuffix(w.s, "\n") && s == ")\n" {
+		w.s = strings.TrimSuffix(w.s, "\n")
+	}
+	if w.s != "" {
+		if strings.HasSuffix(w.s, "\n") {
+			w.s += strings.Repeat(" ", w.l)
 		}
-		w.WriteByte(b)
-		if b == '\n' {
-			w.WriteString(strings.Repeat(" ", l))
+		_, err = w.Writer.Write([]byte(w.s))
+		if err != nil {
+			return 0, err
 		}
 	}
-	w.Flush()
+	w.s = s
+
+	switch s {
+	case "if\n":
+		w.l++
+	case "end\n", ")\n":
+		w.l--
+		if w.l < 0 {
+			w.l = 0
+		}
+	}
+	if strings.HasPrefix(s, "block ") || strings.HasPrefix(s, "loop ") {
+		w.l++
+	}
+	if strings.HasPrefix(s, "(func ") {
+		w.l = 1
+	}
+	return len(p), nil
+}
+func tee(a, b string) (string, string) {
+	if strings.HasPrefix(a, "local.set $") && strings.HasPrefix(b, "local.get $") {
+		if v := a[11:]; v == b[11:] {
+			return "", "local.tee $" + v
+		}
+	}
+	return a, b
 }
