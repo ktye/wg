@@ -1,6 +1,9 @@
 package wg
 
-import "io"
+import (
+	"go/types"
+	"io"
+)
 
 type Type string
 type Emitter interface {
@@ -23,6 +26,7 @@ type Module struct {
 	Funcs   []Func
 	Table   []TableEntries
 	current *Func
+	scopes  []*types.Scope
 }
 type TableEntries struct {
 	Off   int

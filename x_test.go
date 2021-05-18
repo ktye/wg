@@ -208,9 +208,9 @@ func ifelse(x int32) int32 {
 	return x // unreached
 }
 
-// (func $ifinit (param $x i32) (result i32) (local $n i32)
-// local.get $x local.get $x i32.mul local.tee $n i32.const 0 i32.gt_s
-// if i32.const 0 local.get $n i32.sub return end local.get $x)
+// (func $ifinit (param $x i32) (result i32) (local $n.1 i32)
+// local.get $x local.get $x i32.mul local.tee $n.1 i32.const 0 i32.gt_s
+// if i32.const 0 local.get $n.1 i32.sub return end local.get $x)
 func ifinit(x int32) int32 {
 	if n := x * x; n > 0 {
 		return -n
@@ -229,9 +229,9 @@ func while(n int32) (r int32) {
 	return r
 }
 
-// (func $forloop (param $n i32) (result i32) (local $r i32) (local $i i32)
-// i32.const 0 local.set $i block loop local.get $i local.get $n i32.lt_s i32.eqz br_if 1
-// local.get $r local.get $i i32.add local.set $r local.get $i i32.const 1 i32.add local.set $i br 0 end end local.get $r)
+// (func $forloop (param $n i32) (result i32) (local $r i32) (local $i.1 i32)
+// i32.const 0 local.set $i.1 block loop local.get $i.1 local.get $n i32.lt_s i32.eqz br_if 1
+// local.get $r local.get $i.1 i32.add local.set $r local.get $i.1 i32.const 1 i32.add local.set $i.1 br 0 end end local.get $r)
 func forloop(n int32) (r int32) {
 	for i := int32(0); i < n; i++ {
 		r += i
@@ -270,12 +270,12 @@ func forcontinue(n int32) (r int32) {
 	return r
 }
 
-// (func $forlabel (param $n i32) (result i32) (local $r i32) (local $i i32)
-// i32.const 0 local.set $i
-// block $out:1 loop $out:2 local.get $i local.get $n i32.lt_s i32.eqz br_if 1
+// (func $forlabel (param $n i32) (result i32) (local $r i32) (local $i.1 i32)
+// i32.const 0 local.set $i.1
+// block $out:1 loop $out:2 local.get $i.1 local.get $n i32.lt_s i32.eqz br_if 1
 // block loop local.get $r i32.const 5 i32.eq if br $out:1 end
-// local.get $r i32.const 1 i32.add local.set $r br 0 end end
-// local.get $i i32.const 1 i32.add local.set $i br 0 end end local.get $r)
+// local.get $r   i32.const 1 i32.add local.set $r br 0 end end
+// local.get $i.1 i32.const 1 i32.add local.set $i.1 br 0 end end local.get $r)
 func forlabel(n int32) (r int32) {
 out:
 	for i := int32(0); i < n; i++ {
@@ -287,4 +287,16 @@ out:
 		}
 	}
 	return r
+}
+
+// (func $scope (result i32) (local $i i32) (local $i.1 i32)
+// i32.const 1 local.set $i
+// i32.const 0 local.set $i.1
+// block loop local.get $i.1 i32.const 5 i32.lt_s i32.eqz br_if 1
+// local.get $i.1 i32.const 1 i32.add local.set $i.1 br 0 end end local.get $i)
+func scope() int32 {
+	i := int32(1)
+	for i := int32(0); i < 5; i++ {
+	}
+	return i
 }

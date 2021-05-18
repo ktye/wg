@@ -84,6 +84,8 @@ func (m *Module) parseGlobals(a *ast.File) (r []Assign) {
 func (m *Module) parseFuncs(a *ast.File) (r []Func) {
 	for _, d := range a.Decls {
 		if f, o := d.(*ast.FuncDecl); o {
+			tf := info.ObjectOf(f.Name).(*types.Func)
+			m.scopes = catscopes(tf.Scope())
 			ff := m.parseFunc(f)
 			if ff.Name != "init" {
 				r = append(r, m.parseFunc(f))
@@ -256,7 +258,7 @@ func (m *Module) parseStmt(st ast.Stmt) Stmt {
 }
 func (m *Module) parseAssign(a *ast.AssignStmt) (r Assign) {
 	for i := range a.Lhs {
-		r.Name = append(r.Name, varname(a.Lhs[i]))
+		r.Name = append(r.Name, m.varname(a.Lhs[i]))
 		r.Glob = append(r.Glob, isglobal(a.Lhs[i]))
 	}
 	for i := range a.Rhs {
@@ -342,7 +344,7 @@ func (m *Module) parseDeclSpec(s ast.Spec, globalscope int, tok token.Token) (r 
 }
 
 func (m *Module) parseIncDec(a *ast.IncDecStmt) (r Assign) {
-	s := varname(a.X)
+	s := m.varname(a.X)
 	g := isglobal(a)
 	r.Name = []string{s}
 	r.Glob = []bool{g}
@@ -403,21 +405,47 @@ func (m *Module) parseFor(a *ast.ForStmt, label string) (r Stmts) {
 	}
 	return append(r, For{Cond: cond, Post: post, Body: body, Label: label})
 }
-func isglobal(a ast.Node) bool {
-	switch v := a.(type) {
-	case *ast.Ident:
-		return info.ObjectOf(v).Parent() == pkg.Scope()
-	case *ast.SelectorExpr:
-		return isglobal(v.X)
+func catscopes(s *types.Scope) (r []*types.Scope) {
+	r = append(r, s)
+	for i := 0; i < s.NumChildren(); i++ {
+		r = append(r, catscopes(s.Child(i))...)
 	}
-	return false
+	return r
 }
-func varname(a ast.Node) string {
+func scope(a ast.Node) *types.Scope {
 	switch v := a.(type) {
 	case *ast.Ident:
-		return v.Name
+		return info.ObjectOf(v).Parent()
 	case *ast.SelectorExpr:
-		return varname(v.X) + "." + v.Sel.Name
+		return scope(v.X)
+	case *ast.ValueSpec:
+		return scope(v.Names[0])
+	case *ast.IncDecStmt:
+		return scope(v.X)
+	case *ast.GenDecl:
+		return scope(v.Specs[0])
+	default:
+		panic(position(a) + ": unknown scope: " + reflect.TypeOf(v).String())
+	}
+}
+func isglobal(a ast.Node) bool { return scope(a) == pkg.Scope() }
+func (m *Module) lookup(s *types.Scope) string {
+	for i := range m.scopes {
+		if s == m.scopes[i] {
+			if i == 0 {
+				break
+			}
+			return "." + strconv.Itoa(i)
+		}
+	}
+	return ""
+}
+func (m *Module) varname(a ast.Node) string {
+	switch v := a.(type) {
+	case *ast.Ident:
+		return v.Name + m.lookup(scope(a))
+	case *ast.SelectorExpr:
+		return m.varname(v.X) + "." + v.Sel.Name
 	default:
 		panic(position(a) + ": unknown variable node: " + reflectType(a))
 	}
@@ -447,7 +475,7 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 	if ic, o := a.Fun.(*ast.TypeAssertExpr); o {
 		return m.parseCallIndirect(ic, a.Args)
 	}
-	name := varname(a.Fun)
+	name := m.varname(a.Fun)
 
 	var args []Expr
 	switch name {
@@ -467,7 +495,7 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 	if s, o := a.Fun.(*ast.SelectorExpr); o { //method receiver
 		name = strings.TrimPrefix(info.TypeOf(s.X).String(), "input.")
 		name += "." + s.Sel.Name
-		args = append(args, parseGets(s.X))
+		args = append(args, m.parseGets(s.X))
 	}
 	for i := range a.Args {
 		args = append(args, m.parseExpr(a.Args[i]))
@@ -500,39 +528,41 @@ func parseIdent(a ast.Node) string { // x or x.a or x.a.b
 		panic(position(a) + ": unknown type: " + reflectType(a))
 	}
 }
-func parseIdents(a ast.Node) (r []string) { // x(maybe struct) x.a.b(maybe embedded)
+func (m *Module) parseIdents(a ast.Node) (r []string) { // x(maybe struct) x.a.b(maybe embedded)
 	switch v := a.(type) {
 	case *ast.Ident:
+		s := m.lookup(scope(v))
 		if info.TypeOf(v) == nil {
-			return []string{v.Name}
+			return []string{v.Name + s}
 		}
-		return structVars(v.Name, info.TypeOf(v).Underlying())
+		return m.structVars(v.Name, info.TypeOf(v).Underlying(), s)
 	case *ast.SelectorExpr:
+		s := m.lookup(scope(v))
 		t := info.TypeOf(v).Underlying()
 		p := parseIdent(v.X) + "." + v.Sel.Name
-		r = structVars(p, t)
+		r = m.structVars(p, t, s)
 		return r
 	default:
 		panic(position(a) + ": unknown type: " + reflectType(a))
 	}
 }
-func structVars(s string, a types.Type) (names []string) {
+func (m *Module) structVars(s string, a types.Type, scope string) (names []string) {
 	if st, o := a.(*types.Struct); o {
 		for i := 0; i < st.NumFields(); i++ {
 			f := st.Field(i)
-			n := structVars(s+"."+f.Name(), f.Type().Underlying())
+			n := m.structVars(s+"."+f.Name(), f.Type().Underlying(), scope)
 			names = append(names, n...)
 		}
 		return names
 	} else {
-		return []string{s}
+		return []string{s + scope}
 	}
 }
-func parseGets(a ast.Node) Expr {
+func (m *Module) parseGets(a ast.Node) Expr {
 	if isglobal(a) {
-		return GlobalGets(parseIdents(a))
+		return GlobalGets(m.parseIdents(a))
 	} else {
-		return LocalGets(parseIdents(a))
+		return LocalGets(m.parseIdents(a))
 	}
 }
 func (m *Module) parseExpr(a ast.Expr) Expr {
@@ -549,7 +579,7 @@ func (m *Module) parseExpr(a ast.Expr) Expr {
 			Op: Op{Name: v.Op.String(), Type: parseType(info.TypeOf(v.X), position(v))},
 		}
 	case *ast.Ident, *ast.SelectorExpr:
-		return parseGets(a)
+		return m.parseGets(a)
 	case *ast.BasicLit:
 		return parseLiteral(v)
 	case *ast.CallExpr:
