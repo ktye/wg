@@ -1,0 +1,14 @@
+wg (webassembly from go)
+
+wg compiles a subset of go to webassembly text format
+
+all memory is yours. no stack, no runtime.
+
+
+go install github.com/ktye/wg/cmd/wg
+
+wg file.go > file.wat
+wg dir     > package.wat
+
+
+see x_test.go for supported language features.
