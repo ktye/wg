@@ -612,6 +612,8 @@ func (m *Module) parseExpr(a ast.Expr) Expr {
 		return parseLiteral(v)
 	case *ast.CallExpr:
 		return m.parseCall(v)
+	case *ast.ParenExpr:
+		return m.parseExpr(v.X)
 	default:
 		panic(position(a) + ": unknown expr: " + reflectType(a))
 	}

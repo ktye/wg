@@ -84,6 +84,13 @@ func retval(x int32) (r int32) {
 	return r
 }
 
+// (func $trap (param $x i32) (result i32)
+// unreachable local.get $x)
+func trap(x int32) int32 {
+	panic(x)
+	return x
+}
+
 // embed
 type st1 struct {
 	a int32

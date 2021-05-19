@@ -9,4 +9,4 @@ go install ./cmd/wg
 go test
 
 wg x_test.go > x.wat 
-$wat2wasm x.wat -o x.wasm
+$wat2wasm x.wat 

@@ -186,6 +186,10 @@ func (l Literal) wat(w io.Writer) {
 	fmt.Fprintf(w, "%s.const %s\n", l.Type, l.Value)
 }
 func (c Call) wat(w io.Writer) {
+	if c.Func == "panic" {
+		fmt.Fprintln(w, "unreachable")
+		return
+	}
 	for i := range c.Args {
 		c.Args[i].wat(w)
 	}
