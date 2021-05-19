@@ -222,9 +222,9 @@ func parseType(t types.Type, pos string) Type {
 	s := t.Underlying().String()
 
 	switch s {
-	case "bool":
+	case "bool", "untyped bool":
 		return U32
-	case "int32":
+	case "int32", "untyped int":
 		return I32
 	case "uint32":
 		return U32
