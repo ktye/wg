@@ -476,9 +476,15 @@ func (m *Module) varname(a ast.Node) string {
 		panic(position(a) + ": unknown variable node: " + reflectType(a))
 	}
 }
-func parseLiteral(a *ast.BasicLit) (r Literal) {
+func parseLiteral(a *ast.BasicLit, xt types.Type) (r Literal) {
+	var t Type
+	if b, o := info.TypeOf(a).(*types.Basic); o && b.Kind() == types.UntypedInt && xt != nil {
+		t = parseType(xt, position(a))
+	} else {
+		t = parseType(info.TypeOf(a), position(a))
+	}
 	r = Literal{
-		Type:  parseType(info.TypeOf(a), position(a)),
+		Type:  t,
 		Value: a.Value,
 	}
 	if strings.HasPrefix(r.Value, "'") {
@@ -624,15 +630,21 @@ func (m *Module) parseExpr(a ast.Expr) Expr {
 			Op: Op{Name: v.Op.String(), Type: parseType(info.TypeOf(v.X), position(v))},
 		}
 	case *ast.BinaryExpr:
+		var y Expr
+		if l, o := v.Y.(*ast.BasicLit); o {
+			y = parseLiteral(l, info.TypeOf(v.X))
+		} else {
+			y = m.parseExpr(v.Y)
+		}
 		return Binary{
 			X:  m.parseExpr(v.X),
-			Y:  m.parseExpr(v.Y),
+			Y:  y,
 			Op: Op{Name: v.Op.String(), Type: parseType(info.TypeOf(v.X), position(v))},
 		}
 	case *ast.Ident, *ast.SelectorExpr:
 		return m.parseGets(a)
 	case *ast.BasicLit:
-		return parseLiteral(v)
+		return parseLiteral(v, nil)
 	case *ast.CallExpr:
 		return m.parseCall(v)
 	case *ast.ParenExpr:
