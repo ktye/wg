@@ -48,6 +48,10 @@ func negi(x I) I { return -x }
 // local.get $x f32.neg)
 func negf(x float32) float32 { return -x }
 
+// (func $clz (param $x i32) (result i32)
+// local.get $x i32.clz)
+func clz(x uint32) int32 { return I32clz(x) }
+
 // structs
 type st struct {
 	a I

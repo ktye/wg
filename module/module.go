@@ -3,6 +3,7 @@ package module
 import (
 	"encoding/binary"
 	"math"
+	"math/bits"
 )
 
 // Memory creates a linear memory with size blocks*64kB.
@@ -48,3 +49,21 @@ func Functions(off int, funcs ...interface{}) {
 
 // Export registers the functions as exported.
 func Export(funcs ...interface{}) {}
+
+// Direct wasm opcodes
+func I32clz(x uint32) int32    { return int32(bits.LeadingZeros32(x)) }
+func I64clz(x uint64) int32    { return int32(bits.LeadingZeros64(x)) }
+func I32ctz(x uint32) int32    { return int32(bits.TrailingZeros32(x)) }
+func I64ctz(x uint64) int32    { return int32(bits.TrailingZeros64(x)) }
+func I32popcnt(x uint32) int32 { return int32(bits.OnesCount32(x)) }
+func I64popcnt(x uint64) int32 { return int32(bits.OnesCount64(x)) }
+
+// f64 ops
+func F64abs(x float64) float64         { return math.Abs(x) }
+func F64sqrt(x float64) float64        { return math.Sqrt(x) }
+func F64ceil(x float64) float64        { return math.Ceil(x) }
+func F64floor(x float64) float64       { return math.Floor(x) }
+func F64nearest(x float64) float64     { return math.Round(x) }
+func F64min(x, y float64) float64      { return math.Min(x, y) }
+func F64max(x, y float64) float64      { return math.Max(x, y) }
+func F64copysign(x, y float64) float64 { return math.Copysign(x, y) }

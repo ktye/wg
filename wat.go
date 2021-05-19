@@ -226,6 +226,10 @@ func (c Call) call(w io.Writer) {
 	case "SetI32", "SetI64", "SetF32", "SetF64":
 		op = fmt.Sprintf("%c%s.store", c.Func[3]+32, c.Func[4:])
 
+	// wasm ops
+	case "I32clz", "I64clz", "I32ctz", "I64ctz", "I32popcnt", "I64popcnt", "F64abs", "F64sqrt", "F64ceil", "F64floor", "F64nearest", "F64min", "F64max", "F64copysign":
+		op = fmt.Sprintf("%s.%s", strings.ToLower(c.Func[:3]), c.Func[3:])
+
 	default: // normal function call
 		fmt.Fprintf(w, "call $%s\n", c.Func)
 		return
@@ -308,58 +312,40 @@ func init() {
 	// frel:   eq | ne | lt | gt | le | ge
 	wasmops = make(map[string]string)
 	m := map[string]string{ // .(int+float) *(sign)
-		"+":                       ".add",
-		"-":                       ".sub",
-		"*":                       ".mul",
-		"/":                       ".div*",
-		"%":                       "rem*",
-		"&":                       "and",
-		"&&":                      "and",
-		"|":                       "or",
-		"||":                      "or",
-		"^":                       "xor",
-		"<<":                      "shl",
-		">>":                      "shr*",
-		"!":                       "eqz",
-		"==":                      ".eq",
-		"!=":                      ".ne",
-		"<":                       ".lt*",
-		">":                       ".gt*",
-		"<=":                      ".le*",
-		">=":                      ".ge*",
-		"u32bits.LeadingZeros32":  "i32.clz",
-		"u64bits.LeadingZeros64":  "i64.clz",
-		"u32bits.TrailingZeros32": "i32.ctz",
-		"u64bits.TrailingZeros64": "i64.ctz",
-		"u32bits.OnesCount32":     "i32.popcnt",
-		"u64bits.OnesCount64":     "i64.popcnt",
-		"f64math.Abs":             "f64.abs",
-		"f64math.Sqrt":            "f64.sqrt",
-		"f64math.Ceil":            "f64.ceil",
-		"f64math.Floor":           "f64.floor",
-		"f64math.Trunc":           "f64.trunc",
-		"f64math.Round":           "f64.nearest", //?
-		"f64math.Min":             "f64.min",
-		"f64math.Max":             "f64.max",
+		"+":  ".add",
+		"-":  ".sub",
+		"*":  ".mul",
+		"/":  ".div*",
+		"%":  "rem*",
+		"&":  "and",
+		"&&": "and",
+		"|":  "or",
+		"||": "or",
+		"^":  "xor",
+		"<<": "shl",
+		">>": "shr*",
+		"!":  "eqz",
+		"==": ".eq",
+		"!=": ".ne",
+		"<":  ".lt*",
+		">":  ".gt*",
+		"<=": ".le*",
+		">=": ".ge*",
 	}
 	for a, b := range m {
-		if strings.HasPrefix(a, "bits") || strings.HasPrefix(a, "math") {
-			wasmops[a] = b
-		} else {
-			c := strings.TrimPrefix(b, ".")
-			ux, ix := "", ""
-			if strings.HasSuffix(c, "*") {
-				c = strings.TrimSuffix(c, "*")
-				ux, ix = "_u", "_s"
-			}
-			wasmops["u32"+a] = "i32." + c + ux
-			wasmops["i32"+a] = "i32." + c + ix
-			wasmops["u64"+a] = "i64." + c + ux
-			wasmops["i64"+a] = "i64." + c + ix
-			if strings.HasPrefix(b, ".") {
-				wasmops["f32"+a] = "f32." + c
-				wasmops["f64"+a] = "f64." + c
-			}
+		c := strings.TrimPrefix(b, ".")
+		ux, ix := "", ""
+		if strings.HasSuffix(c, "*") {
+			c = strings.TrimSuffix(c, "*")
+			ux, ix = "_u", "_s"
+		}
+		wasmops["u32"+a] = "i32." + c + ux
+		wasmops["i32"+a] = "i32." + c + ix
+		wasmops["u64"+a] = "i64." + c + ux
+		wasmops["i64"+a] = "i64." + c + ix
+		if strings.HasPrefix(b, ".") {
+			wasmops["f32"+a] = "f32." + c
+			wasmops["f64"+a] = "f64." + c
 		}
 	}
 
