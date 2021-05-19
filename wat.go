@@ -231,7 +231,7 @@ func (c Call) call(w io.Writer) {
 		op = fmt.Sprintf("%c%s.store", c.Func[3]+32, c.Func[4:])
 
 	// wasm ops
-	case "I32clz", "I64clz", "I32ctz", "I64ctz", "I32popcnt", "I64popcnt", "F64abs", "F64sqrt", "F64ceil", "F64floor", "F64nearest", "F64min", "F64max", "F64copysign":
+	case "I32clz", "I64clz", "I32ctz", "I64ctz", "I32popcnt", "I64popcnt", "F64abs", "F64sqrt", "F64ceil", "F64floor", "F64nearest", "F64min", "F64max", "F64copysign", "I64reinterpret_f64", "F64reinterpret_i64", "I32reinterpret_f32", "F32reinterpret_i32":
 		op = fmt.Sprintf("%s.%s", strings.ToLower(c.Func[:3]), c.Func[3:])
 
 	default: // normal function call
@@ -362,7 +362,6 @@ func init() {
 		"f64<-i32": "f64.convert_i32_s", "f64<-u32": "f64.convert_i32_u", "f64<-i64": "f64.convert_i64_s", "f64<-u64": "f64.convert_i64_u", "f64<-f32": "f64.promote_f32", "f64<-f64": "",
 	}
 	// missing:
-	//   [if]{32,64}.reinterpret_[fi]{32,64}
 	//   i{32,64}.extend_{8,16}_s
 	//   i{32,64}.trunc_sat_f{32,64}_[su]
 }
