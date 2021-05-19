@@ -33,12 +33,15 @@ func Parse(path string) Module { // file.go or dir
 			panic("multiple packages in " + path)
 		}
 		for _, p := range pkgs {
-			f = ast.MergePackageFiles(p, 0)
+			f = ast.MergePackageFiles(p, ast.FilterFuncDuplicates|ast.FilterImportDuplicates)
 		}
 	}
+	//ast.Print(fset, f)
+	filterImports(f)
 
 	var conf types.Config
 	conf.Importer = importer.For("source", nil) // importer.Default()
+	//conf.Importer = importer.Default()
 	info = types.Info{
 		Types: make(map[ast.Expr]types.TypeAndValue),
 		Defs:  make(map[*ast.Ident]types.Object),
@@ -56,6 +59,26 @@ func fatal(e error) {
 	if e != nil {
 		panic(e)
 	}
+}
+func filterImports(a *ast.File) { // the merged package file may have duplicated imports, which the type checker does not like.
+	m := make(map[string]bool)
+	var decls []ast.Decl
+	for _, d := range a.Decls {
+		if g, o := d.(*ast.GenDecl); o && g.Tok == token.IMPORT {
+			if len(g.Specs) == 1 { // todo: multiple specs
+				sp := g.Specs[0]
+				if s, o := sp.(*ast.ImportSpec); o {
+					if p := s.Path.Value; m[p] {
+						continue
+					} else {
+						m[p] = true
+					}
+				}
+			}
+		}
+		decls = append(decls, d)
+	}
+	a.Decls = decls
 }
 func position(a ast.Node) string       { return fset.Position(a.Pos()).String() }
 func reflectType(a interface{}) string { return reflect.TypeOf(a).String() }
