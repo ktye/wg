@@ -302,6 +302,23 @@ out:
 	return r
 }
 
+// (func $brtable (param $x i32) (result i32)
+// block block block
+// i32.const 1 local.get $x i32.add
+// br_table 0 1 2 br 2 end
+// local.get $x i32.const 2 i32.add local.set $x br 1 end
+// local.get $x i32.const 2 i32.mul local.set $x br 0 end local.get $x)
+func brtable(x int32) int32 {
+	switch uint32(1 + x) {
+	case 0:
+	case 1:
+		x += 2
+	default:
+		x *= 2
+	}
+	return x
+}
+
 // (func $scope (result i32) (local $i i32) (local $i.1 i32)
 // i32.const 1 local.set $i
 // i32.const 0 local.set $i.1

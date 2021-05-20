@@ -3,6 +3,7 @@ package wg
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -264,6 +265,30 @@ func (i If) wat(w io.Writer) {
 		}
 	}
 	fmt.Fprintln(w, "end")
+}
+func (s Switch) wat(w io.Writer) {
+	for i := 0; i < 1+len(s.Case); i++ {
+		fmt.Fprintln(w, "block")
+	}
+	s.E.wat(w)
+	t := "br_table"
+	for i := range s.Case {
+		t += " " + strconv.Itoa(i)
+	}
+	if s.Def != nil {
+		t += " " + strconv.Itoa(len(s.Case))
+	}
+	fmt.Fprintln(w, t)
+	fmt.Fprintln(w)
+	for i := 1 + len(s.Case); i != 0; i-- {
+		if i == 1 && s.Def != nil {
+			s.Def.wat(w)
+		} else if i > 1 {
+			s.Case[1+len(s.Case)-i].wat(w)
+		}
+		fmt.Fprintf(w, "br %d\n", i-1)
+		fmt.Fprintln(w, "end")
+	}
 }
 func (f For) wat(w io.Writer) {
 	l1, l2 := "", ""

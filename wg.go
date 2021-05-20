@@ -246,6 +246,12 @@ func (m *Module) parseBody(st []ast.Stmt) (r []Stmt) {
 	}
 	return r
 }
+func (m *Module) parseStmts(v []ast.Stmt) (r Stmts) {
+	for i := range v {
+		r = append(r, m.parseStmt(v[i]))
+	}
+	return r
+}
 func (m *Module) parseStmt(st ast.Stmt) Stmt {
 	switch v := st.(type) {
 	case *ast.AssignStmt:
@@ -266,6 +272,8 @@ func (m *Module) parseStmt(st ast.Stmt) Stmt {
 		return m.parseDecl(v.Decl.(*ast.GenDecl), 0)
 	case *ast.IfStmt:
 		return m.parseIf(v)
+	case *ast.SwitchStmt:
+		return m.parseSwitch(v)
 	case *ast.ForStmt:
 		return m.parseFor(v, "")
 	case *ast.IncDecStmt:
@@ -412,6 +420,29 @@ func (m *Module) parseIf(a *ast.IfStmt) (r Stmts) {
 		}
 	}
 	return append(r, i)
+}
+func (m *Module) parseSwitch(a *ast.SwitchStmt) (r Switch) {
+	if a.Init != nil {
+		panic(position(a) + ": switch statement with init is not supported")
+	}
+	r.E = m.parseExpr(a.Tag)
+	for i := range a.Body.List {
+		c := a.Body.List[i].(*ast.CaseClause)
+		if c.List == nil && i == len(a.Body.List)-1 {
+			r.Def = m.parseStmts(c.Body)
+		} else {
+			if len(c.List) != 1 {
+				panic(position(c) + ": multiple cases are not supported")
+			} else {
+				cs := info.Types[c.List[0]].Value.String()
+				if cs != strconv.Itoa(i) {
+					panic(position(c) + ": cases must be constants 0 1 2..")
+				}
+			}
+			r.Case = append(r.Case, m.parseStmts(c.Body))
+		}
+	}
+	return r
 }
 func (m *Module) parseFor(a *ast.ForStmt, label string) (r Stmts) {
 	if a.Init != nil {

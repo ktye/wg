@@ -114,6 +114,11 @@ type If struct {
 	If         Expr
 	Then, Else Stmts
 }
+type Switch struct {
+	E    Expr
+	Case []Stmts
+	Def  Stmts
+}
 type For struct {
 	Cond  Expr
 	Post  Stmt
