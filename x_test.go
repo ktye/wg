@@ -343,6 +343,19 @@ func scope() int32 {
 	return i
 }
 
+// (func $scopevar (param $x i32) (result i32) (local $i.2 i32)
+// local.get $x i32.const 0 i32.gt_s if i32.const 0 local.set $i.2
+// local.get $x i32.const 0 i32.lt_s if local.get $i.2 local.set $x end end local.get $x)
+func scopevar(x int32) int32 {
+	if x > 0 {
+		var i int32 = 0
+		if x < 0 {
+			x = i
+		}
+	}
+	return x
+}
+
 // (func $wasicall (result i64)
 // i32.const 0 i64.const 0 call $wasi_unstable.clock_time_get)
 func wasicall() wasi_unstable.Timestamp { return wasi_unstable.Clock_time_get(0, 0) }

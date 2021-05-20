@@ -338,7 +338,7 @@ func (m *Module) parseDeclSpec(s ast.Spec, globalscope int, tok token.Token) (r 
 			st = []Type{parseType(info.TypeOf(n), position(n))}
 		}
 		for i := range sn {
-			name := n.Name
+			name := n.Name + m.lookup(scope(s))
 			if sn[i] != "" {
 				name = n.Name + "." + sn[i]
 			}
