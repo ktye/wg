@@ -414,9 +414,10 @@ func (m *Module) parseIf(a *ast.IfStmt) (r Stmts) {
 		i.Then = append(i.Then, m.parseStmt(st))
 	}
 	if a.Else != nil {
-		b := a.Else.(*ast.BlockStmt)
-		for _, st := range b.List {
-			i.Else = append(i.Else, m.parseStmt(st))
+		if b, o := a.Else.(*ast.BlockStmt); o {
+			i.Else = m.parseStmts(b.List)
+		} else {
+			i.Else = Stmts{m.parseStmt(a.Else)}
 		}
 	}
 	return append(r, i)

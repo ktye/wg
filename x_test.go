@@ -221,6 +221,18 @@ func ifelse(x int32) int32 {
 	return x // unreached
 }
 
+// (func $elseif (param $x i32) (result i32)
+// local.get $x i32.const 0 i32.gt_s if local.get $x i32.const 1 i32.add local.set $x
+// else local.get $x i32.const 0 i32.lt_s if local.get $x i32.const 1 i32.sub local.set $x end end local.get $x)
+func elseif(x int32) int32 {
+	if x > 0 {
+		x++
+	} else if x < 0 {
+		x--
+	}
+	return x
+}
+
 // (func $ifinit (param $x i32) (result i32) (local $n.1 i32)
 // local.get $x local.get $x i32.mul local.tee $n.1 i32.const 0 i32.gt_s
 // if i32.const 0 local.get $n.1 i32.sub return end local.get $x)
