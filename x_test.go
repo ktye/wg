@@ -356,6 +356,12 @@ func scopevar(x int32) int32 {
 	return x
 }
 
+// (func $memcpy (param $x i32)
+// local.get $x local.get $x i32.const 10 i32.add i32.const 5 memory.copy)
+func memcpy(x int32) {
+	Memorycopy(x, x+10, 5)
+}
+
 // (func $wasicall (result i64)
 // i32.const 0 i64.const 0 call $wasi_unstable.clock_time_get)
 func wasicall() wasi_unstable.Timestamp { return wasi_unstable.Clock_time_get(0, 0) }

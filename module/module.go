@@ -50,6 +50,15 @@ func Functions(off int, funcs ...interface{}) {
 // Export registers the functions as exported.
 func Export(funcs ...interface{}) {}
 
+// Bulk memory instructions.
+func Memorycopy(src, dst, n int32) { copy(Bytes[dst:], Bytes[src:src+n]) }
+func Memoryfill(src, val, n int32) {
+	b := byte(val)
+	for i := int32(0); i < n; i++ {
+		Bytes[i] = b
+	}
+}
+
 // Direct wasm opcodes
 func I32clz(x uint32) int32    { return int32(bits.LeadingZeros32(x)) }
 func I64clz(x uint64) int32    { return int32(bits.LeadingZeros64(x)) }
