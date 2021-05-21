@@ -39,8 +39,8 @@ var Func []interface{}
 // Functions adds the function arguments to the indirect function table
 // starting at the given offset.
 func Functions(off int, funcs ...interface{}) {
-	if n := off + len(Func); n >= len(Func) {
-		Func = append(Func, make([]interface{}, 1+len(Func)-n)...)
+	if n := off + len(funcs); n >= len(Func) {
+		Func = append(Func, make([]interface{}, 1+n-len(Func))...)
 	}
 	for i, f := range funcs {
 		Func[i+off] = f
@@ -51,11 +51,11 @@ func Functions(off int, funcs ...interface{}) {
 func Export(funcs ...interface{}) {}
 
 // Bulk memory instructions.
-func Memorycopy(src, dst, n int32) { copy(Bytes[dst:], Bytes[src:src+n]) }
-func Memoryfill(src, val, n int32) {
+func Memorycopy(dst, src, n int32) { copy(Bytes[dst:], Bytes[src:src+n]) }
+func Memoryfill(dst, val, n int32) {
 	b := byte(val)
 	for i := int32(0); i < n; i++ {
-		Bytes[i] = b
+		Bytes[dst+i] = b
 	}
 }
 
