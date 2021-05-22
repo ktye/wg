@@ -37,6 +37,10 @@ func (m Module) Wat(ww io.Writer) {
 			fmt.Fprintf(w, "(global $%s %s (%s.const %s))\n", s, mut, t, u)
 		}
 	}
+	for _, d := range m.Data {
+		q := strings.Replace(strconv.Quote(d.Data), `\x`, `\`, -1)
+		fmt.Fprintf(w, "(data (i32.const %d) %s)\n", d.Off, q)
+	}
 	for _, f := range m.Funcs {
 		f.wat(w)
 	}
@@ -123,7 +127,8 @@ func (a Assign) wat(w io.Writer) {
 		e.wat(w)
 	}
 	if a.Expr != nil {
-		for i, n := range a.Name {
+		for i := len(a.Name) - 1; i >= 0; i-- {
+			n := a.Name[i]
 			if a.Glob[i] {
 				fmt.Fprintf(w, "global.set $%s\n", n)
 			} else {

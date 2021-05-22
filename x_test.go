@@ -12,6 +12,7 @@ func init() {
 	Memory(1)
 	Functions(0, Add, dup)
 	Export(dup, ignore)
+	Data(0, "abc")
 }
 
 // (func $Add (param $x i32) (param $y i32) (result i32)
@@ -76,6 +77,16 @@ func (s st) method(y int64) int64 { return int64(s.a) / y }
 // (func $call (param $x f32) (result f32)
 // local.get $x call $negf)
 func call(x float32) float32 { return negf(x) }
+
+// (func $call2 (param $x i32) (result i32) local.get $x call $dup call $Add)
+func call2(x int32) int32 { return Add(dup(x)) }
+
+// (func $call3 (param $x i32) (result i32) (local $a i32) (local $b i32)
+// local.get $x call $dup local.set $b local.tee $a local.get $b i32.add)
+func call3(x int32) int32 {
+	a, b := dup(x)
+	return a + b
+}
 
 // (func $retval (param $x i32) (result i32) (local $r i32)
 // i32.const 1 local.get $x i32.add local.tee $r)
@@ -150,6 +161,13 @@ func varassign(x int32) int32 {
 	return x + y
 }
 
+// (func $varassign2 (param $x i32) (result i32) (local $a i32) (local $b i32)
+// local.get $x i32.const 2 local.get $x i32.mul local.set $b local.tee $a local.get $b i32.sub)
+func varassign2(x int32) int32 {
+	var a, b int32 = x, 2 * x
+	return a - b
+}
+
 // (func $localstruct (param $x i64) (result i32) (result i64)
 // (local $s.st1.a i32) (local $s.a i64)
 // local.get $x local.set $s.a local.get $s.st1.a local.get $s.a)
@@ -157,6 +175,14 @@ func localstruct(x int64) st2 {
 	var s st2
 	s.a = x
 	return s
+}
+
+// (func $localstruct2 (param $x i64) (result i64)
+// (local $s.st1.a i32) (local $s.a i64)
+// local.get $x call $localstruct local.set $s.a local.set $s.st1.a local.get $s.a)
+func localstruct2(x int64) int64 {
+	var s st2 = localstruct(x)
+	return s.a
 }
 
 var g int32

@@ -27,6 +27,7 @@ type Module struct {
 	Globals []Assign
 	Funcs   []Func
 	Table   []TableEntries
+	Data    []Data
 	current *Func
 	scopes  []*types.Scope
 }
@@ -39,6 +40,10 @@ type Import struct {
 	Func    string
 	Arg     []Type
 	Res     []Type
+}
+type Data struct {
+	Off  int
+	Data string
 }
 type Func struct {
 	Name     string

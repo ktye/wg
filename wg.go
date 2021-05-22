@@ -190,8 +190,15 @@ func parseTypes(a ast.Expr) (names []string, rtype []Type) {
 				rtype = append(rtype, t...)
 			}
 			return names, rtype
+		case *types.Tuple:
+			rtype = parseTupleTypes(v, pos)
+			names = make([]string, len(rtype))
+			for i := range names {
+				names[i] = name
+			}
+			return names, rtype
 		default:
-			panic(position(a) + ": unknown type")
+			panic(position(a) + ": unknown type: " + reflectType(v))
 		}
 	}
 	return f("", info.TypeOf(a).Underlying())
@@ -565,6 +572,11 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 		for _, f := range a.Args {
 			m.Exports[f.(*ast.Ident).Name] = true
 		}
+		return Nop{}
+	case "Data": // module.Data(0, "...")
+		off, _ := strconv.Atoi(a.Args[0].(*ast.BasicLit).Value)
+		data := a.Args[1].(*ast.BasicLit).Value
+		m.Data = append(m.Data, Data{off, data})
 		return Nop{}
 	}
 	if s, o := a.Fun.(*ast.SelectorExpr); o { //method receiver

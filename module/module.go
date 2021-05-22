@@ -50,6 +50,9 @@ func Functions(off int, funcs ...interface{}) {
 // Export registers the functions as exported.
 func Export(funcs ...interface{}) {}
 
+// Data section (call after Memory)
+func Data(off int, value string) { copy(Bytes[off:], value) }
+
 // Bulk memory instructions.
 func Memorycopy(dst, src, n int32) { copy(Bytes[dst:], Bytes[src:src+n]) }
 func Memoryfill(dst, val, n int32) {
