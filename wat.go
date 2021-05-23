@@ -189,7 +189,8 @@ func (b Binary) wat(w io.Writer) {
 	fmt.Fprintln(w, op)
 }
 func (l Literal) wat(w io.Writer) {
-	fmt.Fprintf(w, "%s.const %s\n", l.Type, l.Value)
+	s := l.Value
+	fmt.Fprintf(w, "%s.const %s\n", l.Type, s)
 }
 func (c Call) wat(w io.Writer) {
 	if c.Func == "panic" {

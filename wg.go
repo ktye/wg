@@ -660,6 +660,13 @@ func (m *Module) structVars(s string, a types.Type, scope string) (names []strin
 	}
 }
 func (m *Module) parseGets(a ast.Node) Expr {
+	if i, o := a.(*ast.Ident); o {
+		if i.Name == "false" {
+			return Literal{I32, "0"}
+		} else if i.Name == "true" {
+			return Literal{I32, "1"}
+		}
+	}
 	if isglobal(a) {
 		return GlobalGets(m.parseIdents(a))
 	} else {
