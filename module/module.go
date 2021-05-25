@@ -15,7 +15,7 @@ func I8(addr int32) int32    { return int32(int8(Bytes[addr])) }
 func U8(addr int32) uint32   { return uint32(Bytes[addr]) }
 func I16(addr int32) int32   { return int32(int16(binary.LittleEndian.Uint16(Bytes[addr:]))) }
 func U16(addr int32) uint32  { return uint32(binary.LittleEndian.Uint16(Bytes[addr:])) }
-func I32(addr int32) int32   { return int32(binary.LittleEndian.Uint16(Bytes[addr:])) }
+func I32(addr int32) int32   { return int32(binary.LittleEndian.Uint32(Bytes[addr:])) }
 func U32(addr int32) uint32  { return binary.LittleEndian.Uint32(Bytes[addr:]) }
 func I64(addr int32) int64   { return int64(binary.LittleEndian.Uint64(Bytes[addr:])) }
 func U64(addr int32) uint64  { return binary.LittleEndian.Uint64(Bytes[addr:]) }
