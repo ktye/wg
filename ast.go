@@ -3,6 +3,7 @@ package wg
 import (
 	"go/types"
 	"io"
+	"strings"
 )
 
 type Type string
@@ -13,12 +14,20 @@ type Emitter interface {
 const (
 	V   Type = ""
 	I32      = "i32"
-	U32      = "i32"
+	U32      = "u32"
 	I64      = "i64"
-	U64      = "i64"
+	U64      = "u64"
 	F32      = "f32"
 	F64      = "f64"
 )
+
+func (t Type) String() string {
+	r := string(t)
+	if strings.HasPrefix(r, "u") {
+		return "i" + r[1:]
+	}
+	return r
+}
 
 type Module struct {
 	Memory  string

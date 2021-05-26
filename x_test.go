@@ -38,6 +38,12 @@ func statements() { niladic(); niladic() }
 // i32.const 0 i32.lt_s i32.and)
 func rel(x, y int32) bool { return x > 0 && y < 0 }
 
+// (func $unsign (param $x i32) (result i32)
+// local.get $x i32.const 3 i32.shr_u)
+func unsign(x uint32) uint32 {
+	return x >> 3
+}
+
 // custom types
 type I int64
 

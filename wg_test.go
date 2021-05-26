@@ -14,6 +14,7 @@ func TestWg(t *testing.T) {
 	for _, f := range m.Funcs {
 		var buf bytes.Buffer
 		w := newIndent(&buf)
+		f.Exported = m.Exports[f.Name]
 		f.wat(w)
 		w.Write(nil)
 		got := trim(string(buf.Bytes()))

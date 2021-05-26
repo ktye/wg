@@ -30,9 +30,9 @@ func (m Module) Wat(ww io.Writer) {
 			default:
 				panic("global value must be (cast-to) literal")
 			}
-			mut := string(t)
+			mut := t.String()
 			if g.Const[i] == false {
-				mut = "(mut " + string(t) + ")"
+				mut = "(mut " + t.String() + ")"
 			}
 			fmt.Fprintf(w, "(global $%s %s (%s.const %s))\n", s, mut, t, u)
 		}
@@ -42,6 +42,7 @@ func (m Module) Wat(ww io.Writer) {
 		fmt.Fprintf(w, "(data (i32.const %d) %s)\n", d.Off, q)
 	}
 	for _, f := range m.Funcs {
+		f.Exported = m.Exports[f.Name]
 		f.wat(w)
 	}
 	tmax := 0
@@ -73,7 +74,7 @@ func (m Import) wat(w io.Writer) {
 			return ""
 		}
 		for _, s := range t {
-			r += " " + string(s)
+			r += " " + s.String()
 		}
 		return r + ")"
 	}
@@ -129,7 +130,9 @@ func (a Assign) wat(w io.Writer) {
 	if a.Expr != nil {
 		for i := len(a.Name) - 1; i >= 0; i-- {
 			n := a.Name[i]
-			if a.Glob[i] {
+			if n == "_" {
+				fmt.Fprintf(w, "drop\n")
+			} else if a.Glob[i] {
 				fmt.Fprintf(w, "global.set $%s\n", n)
 			} else {
 				fmt.Fprintf(w, "local.set $%s\n", n)
@@ -386,6 +389,10 @@ func init() {
 			wasmops["f32"+a] = "f32." + c
 			wasmops["f64"+a] = "f64." + c
 		}
+		wasmops["u32&^"] = "i32.const -1\ni32.xor\ni32.and"
+		wasmops["i32&^"] = "i32.const -1\ni32.xor\ni32.and"
+		wasmops["i64&^"] = "i64.const -1\ni64.xor\ni64.and"
+		wasmops["u64&^"] = "i64.const -1\ni64.xor\ni64.and"
 	}
 
 	wasmcst = map[string]string{

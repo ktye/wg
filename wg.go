@@ -122,7 +122,6 @@ func (m *Module) parseFuncs(a *ast.File) (r []Func) {
 func (m *Module) parseFunc(a *ast.FuncDecl) (f Func) {
 	m.current = &f
 	f.Name = a.Name.Name
-	f.Exported = m.Exports[f.Name]
 	args := a.Type.Params.List
 	if a.Recv != nil {
 		args = append(a.Recv.List, args...)
@@ -299,8 +298,12 @@ func (m *Module) parseStmt(st ast.Stmt) Stmt {
 }
 func (m *Module) parseAssign(a *ast.AssignStmt) (r Assign) {
 	for i := range a.Lhs {
-		r.Name = append(r.Name, m.varname(a.Lhs[i]))
-		r.Glob = append(r.Glob, isglobal(a.Lhs[i]))
+		s, g := m.varname(a.Lhs[i]), false
+		r.Name = append(r.Name, s)
+		if s != "_" {
+			g = isglobal(a.Lhs[i])
+		}
+		r.Glob = append(r.Glob, g)
 	}
 	for i := range a.Rhs {
 		r.Expr = append(r.Expr, m.parseExpr(a.Rhs[i]))
@@ -508,6 +511,9 @@ func (m *Module) lookup(s *types.Scope) string {
 func (m *Module) varname(a ast.Node) string {
 	switch v := a.(type) {
 	case *ast.Ident:
+		if v.Name == "_" {
+			return "_"
+		}
 		return v.Name + m.lookup(scope(a))
 	case *ast.SelectorExpr:
 		return m.varname(v.X) + "." + v.Sel.Name
