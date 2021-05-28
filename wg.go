@@ -63,18 +63,23 @@ func fatal(e error) {
 func filterImports(a *ast.File) { // the merged package file may have duplicated imports, which the type checker does not like.
 	m := make(map[string]bool)
 	var decls []ast.Decl
-	for _, d := range a.Decls {
+	for j, d := range a.Decls {
 		if g, o := d.(*ast.GenDecl); o && g.Tok == token.IMPORT {
-			if len(g.Specs) == 1 { // todo: multiple specs
-				sp := g.Specs[0]
+			keep := make([]int, 0)
+			for i, sp := range g.Specs {
 				if s, o := sp.(*ast.ImportSpec); o {
-					if p := s.Path.Value; m[p] {
-						continue
-					} else {
+					if p := s.Path.Value; m[p] == false {
+						keep = append(keep, i)
 						m[p] = true
 					}
 				}
 			}
+			r := make([]ast.Spec, len(keep))
+			for i := range keep {
+				r[i] = g.Specs[i]
+			}
+			g.Specs = r
+			a.Decls[j] = g
 		}
 		decls = append(decls, d)
 	}

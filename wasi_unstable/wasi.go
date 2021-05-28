@@ -23,7 +23,7 @@ func Clock_time_get(id ClockID, prec Timestamp) Timestamp { return Timestamp(tim
 //   p[0:4]: addr, e.g. 8
 //   p[4:8]: number of bytes to write
 //   p[8:]:  data
-// nwritten is a memory location that receive the number of bytes written.
+// written is a memory location that receive the number of bytes written.
 func Fd_write(fd, p, niovec, written int32) int32 {
 	if fd == 1 {
 		addr := module.I32(p) // or p+addr?

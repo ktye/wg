@@ -40,7 +40,7 @@ var Func []interface{}
 // starting at the given offset.
 func Functions(off int, funcs ...interface{}) {
 	if n := off + len(funcs); n >= len(Func) {
-		Func = append(Func, make([]interface{}, 1+n-len(Func))...)
+		Func = append(Func, make([]interface{}, n-len(Func))...)
 	}
 	for i, f := range funcs {
 		Func[i+off] = f
