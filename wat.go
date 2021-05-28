@@ -83,7 +83,11 @@ func (m Import) wat(w io.Writer) {
 	fmt.Fprintf(w, "(import \"%s\" \"%s\" (func $%s.%s %s %s))\n", m.Package, m.Func, m.Package, m.Func, arg, res)
 }
 func (f Func) wat(w io.Writer) {
-	fmt.Fprintf(w, "(func $%s", f.Name)
+	name := f.Name
+	if name == "main" {
+		name = "_start"
+	}
+	fmt.Fprintf(w, "(func $%s", name)
 	if f.Exported {
 		fmt.Fprintf(w, " (export \"%s\")", f.Name)
 	}
