@@ -245,7 +245,7 @@ func parseType(t types.Type, pos string) Type {
 		return U64
 	case "float32":
 		return F32
-	case "float64":
+	case "float64", "untyped float":
 		return F64
 	default:
 		panic(pos + ": unknown type: " + s)
