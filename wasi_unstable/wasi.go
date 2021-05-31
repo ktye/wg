@@ -17,7 +17,10 @@ const (
 	ThreadCPU
 )
 
-func Clock_time_get(id ClockID, prec Timestamp) Timestamp { return Timestamp(time.Now().UnixNano()) }
+func Clock_time_get(id ClockID, prec Timestamp, res int32) int32 {
+	module.SetI64(res, time.Now().UnixNano())
+	return 0
+}
 
 // Memory at p:
 //   p[0:4]: addr, e.g. 8
