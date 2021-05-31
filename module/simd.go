@@ -58,6 +58,11 @@ func I32x4splat(x int32) V128   { return [4]int32{x, x, x, x} }
 func I64x2splat(x int64) V128   { return [2]int64{x, x} }
 func F32x4splat(x float32) V128 { return [4]float32{x, x, x, x} }
 func F64x2splat(x float64) V128 { return [2]float64{x, x} }
+func F64x2replace_lane1(x V128, f float64) V128 {
+	r := x.([2]float64)
+	r[1] = f
+	return r
+}
 
 func mini8(x, y int8) int8    { return int8(mini64(int64(x), int64(y))) }
 func mini32(x, y int32) int32 { return int32(mini64(int64(x), int64(y))) }
@@ -271,6 +276,9 @@ func I64x2max_s(x, y V128) V128 {
 	return r
 }
 
+func F64x2sqrt(x V128) V128 { a := x.([2]float64); return [2]float64{math.Sqrt(a[0]), math.Sqrt(a[1])} }
+func F64x2abs(x V128) V128  { a := x.([2]float64); return [2]float64{math.Abs(a[0]), math.Abs(a[1])} }
+func F64x2neg(x V128) V128  { a := x.([2]float64); return [2]float64{-a[0], -a[1]} }
 func F64x2add(x, y V128) V128 {
 	var r [2]float64
 	a, b := x.([2]float64), y.([2]float64)

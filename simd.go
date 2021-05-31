@@ -19,9 +19,10 @@ func simd(x string, w io.Writer) bool {
 		op = "i8x16.all_true"
 	case "I8x16any_true":
 		op = "i8x16.any_true"
-
+	case "F64x2replace_lane1":
+		op = "f64x2.replace_lane 1"
 	default:
-		for _, op := range []string{"neg", "abs", "add", "sub", "mul", "div", "min_s", "max_s", "min", "max", "eq", "ne", "lt", "lt_s", "gt", "gt_s"} {
+		for _, op := range []string{"sqrt", "neg", "abs", "add", "sub", "mul", "div", "min_s", "max_s", "min", "max", "eq", "ne", "lt", "lt_s", "gt", "gt_s"} {
 			if strings.HasPrefix(x, "I8x16") || strings.HasPrefix(x, "I32x4") || strings.HasPrefix(x, "I64x2") || strings.HasPrefix(x, "F32x4") || strings.HasPrefix(x, "F64x2") {
 				if strings.HasSuffix(x, op) {
 					s := fmt.Sprintf("%c%s.%s\n", x[0]+32, x[1:5], op) // I8x16add -> i8x16.add(a: v128, b: v128)
