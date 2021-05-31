@@ -253,7 +253,12 @@ func (c Call) call(w io.Writer) {
 	case "Memorycopy", "Memoryfill":
 		op = fmt.Sprintf("memory.%s", c.Func[6:])
 
-	default: // normal function call
+	default:
+		if simd(c.Func, w) {
+			return
+		}
+
+		// normal function call
 		fmt.Fprintf(w, "call $%s\n", c.Func)
 		return
 	}

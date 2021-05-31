@@ -201,6 +201,8 @@ func parseTypes(a ast.Expr) (names []string, rtype []Type) {
 				names[i] = name
 			}
 			return names, rtype
+		case *types.Interface:
+			return []string{name}, []Type{V128}
 		default:
 			panic(position(a) + ": unknown type: " + reflectType(v))
 		}

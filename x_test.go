@@ -394,6 +394,16 @@ func memcpy(x int32) {
 	Memorycopy(x, x+10, 5)
 }
 
-// (func $wasicall (result i64)
-// i32.const 0 i64.const 0 call $wasi_unstable.clock_time_get)
-func wasicall() wasi_unstable.Timestamp { return wasi_unstable.Clock_time_get(0, 0) }
+// (func $wasicall (result i32)
+// i32.const 0 i64.const 0 i32.const 0 call $wasi_unstable.clock_time_get)
+func wasicall() int32 { return wasi_unstable.Clock_time_get(0, 0, 0) }
+
+// (func $simd (param $x i32) (local $v v128) (local $w v128)
+// local.get $x v128.load local.set $v
+// local.get $x i32x4.splat local.set $w
+// local.get $x local.get $v local.get $w i32x4.add v128.store)
+func simd(x int32) {
+	v := I32x4load(x)
+	w := I32x4splat(x)
+	I32x4store(x, I32x4add(v, w))
+}
