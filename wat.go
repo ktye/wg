@@ -86,10 +86,11 @@ func (f Func) wat(w io.Writer) {
 	name := f.Name
 	if name == "main" {
 		name = "_start"
+		f.Exported = true
 	}
 	fmt.Fprintf(w, "(func $%s", name)
 	if f.Exported {
-		fmt.Fprintf(w, " (export \"%s\")", f.Name)
+		fmt.Fprintf(w, " (export \"%s\")", name)
 	}
 	for _, a := range f.Args {
 		fmt.Fprintf(w, " (param $%s %s)", a.Name, a.Type)
