@@ -201,13 +201,26 @@ func parseTypes(a ast.Expr) (names []string, rtype []Type) {
 				names[i] = name
 			}
 			return names, rtype
-		case *types.Interface:
-			return []string{name}, []Type{V128}
+		case *types.Array:
+			vt := parseSimdType(v, pos)
+			return []string{name}, []Type{vt}
 		default:
 			panic(position(a) + ": unknown type: " + reflectType(v))
 		}
 	}
 	return f("", info.TypeOf(a).Underlying())
+}
+func parseSimdType(a *types.Array, pos string) Type {
+	switch a.String() {
+	case "[16]int8":
+		return I8x16
+	case "[4]int32":
+		return I32x4
+	case "[2]float64":
+		return F64x2
+	default:
+		panic(pos + ": unknown vector type: " + a.String())
+	}
 }
 func (m *Module) parseSignature(a ast.Expr) (arg, res []Type) {
 	p := position(a)
@@ -249,6 +262,12 @@ func parseType(t types.Type, pos string) Type {
 		return F32
 	case "float64", "untyped float":
 		return F64
+	case "[16]int8":
+		return I8x16
+	case "[4]int32":
+		return I32x4
+	case "[2]float64":
+		return F64x2
 	default:
 		panic(pos + ": unknown type: " + s)
 	}
@@ -528,6 +547,24 @@ func (m *Module) varname(a ast.Node) string {
 		panic(position(a) + ": unknown variable node: " + reflectType(a))
 	}
 }
+func (m *Module) parseSimdMethod(a ast.Node, argv []ast.Expr) Expr {
+	if v, o := a.(*ast.SelectorExpr); o {
+		if vt, o := info.TypeOf(v.X).Underlying().(*types.Array); o {
+			st := parseSimdType(vt, position(a))
+			str := string(st)
+			recv := m.parseExpr(v.X)
+			args := []Expr{recv}
+			for i := range argv {
+				args = append(args, m.parseExpr(argv[i]))
+			}
+			return Call{
+				Func: fmt.Sprintf("%s.%s", str, v.Sel.Name),
+				Args: args,
+			}
+		}
+	}
+	return nil
+}
 func parseLiteral(a *ast.BasicLit, xt types.Type) (r Literal) {
 	var t Type
 	if b, o := info.TypeOf(a).(*types.Basic); o && b.Kind() == types.UntypedInt && xt != nil {
@@ -564,6 +601,9 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 	}
 	if ic, o := a.Fun.(*ast.TypeAssertExpr); o {
 		return m.parseCallIndirect(ic, a.Args)
+	}
+	if e := m.parseSimdMethod(a.Fun, a.Args); e != nil {
+		return e
 	}
 	name := m.varname(a.Fun)
 

@@ -1,7 +1,7 @@
 set -x
 set -e
 
-wat2wasm="/c/local/wabt/wat2wasm.exe --enable-bulk-memory"
+wat2wasm="/c/local/wabt/wat2wasm.exe --enable-bulk-memory --enable-simd"
 wasm2wat=/c/local/wabt/wasm2wat.exe
 validate=/c/local/wabt/wasm-validate.exe
 

@@ -4,6 +4,9 @@ wg compiles a subset of go to webassembly text format
 
 all memory is yours. no stack, no runtime.
 
+- multi-value
+- builk-memory
+- simd types I8x16, I4x32, F64x2
 
 go install github.com/ktye/wg/cmd/wg
 

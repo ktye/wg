@@ -405,5 +405,14 @@ func wasicall() int32 { return wasi_unstable.Clock_time_get(0, 0, 0) }
 func simd(x int32) {
 	v := I32x4load(x)
 	w := I32x4splat(x)
-	I32x4store(x, I32x4add(v, w))
+	I32x4store(x, v.Add(w))
+}
+
+// (func $simd2 (param $x i32)
+// local.get $x
+// local.get $x v128.load
+// local.get $x i32x4.splat
+// i32x4.add v128.store)
+func simd2(x int32) {
+	I32x4store(x, I32x4load(x).Add(I32x4splat(x)))
 }

@@ -12,20 +12,25 @@ type Emitter interface {
 }
 
 const (
-	V    Type = ""
-	I32       = "i32"
-	U32       = "u32"
-	I64       = "i64"
-	U64       = "u64"
-	F32       = "f32"
-	F64       = "f64"
-	V128      = "v128"
+	V     Type = ""
+	I32        = "i32"
+	U32        = "u32"
+	I64        = "i64"
+	U64        = "u64"
+	F32        = "f32"
+	F64        = "f64"
+	I8x16      = "I8x16"
+	I32x4      = "I32x4"
+	F64x2      = "F64x2"
 )
 
 func (t Type) String() string {
 	r := string(t)
 	if strings.HasPrefix(r, "u") {
 		return "i" + r[1:]
+	}
+	if strings.Index(r, "x") > 0 {
+		return "v128"
 	}
 	return r
 }
