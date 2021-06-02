@@ -140,10 +140,11 @@ type Switch struct {
 	Def  Stmts
 }
 type For struct {
-	Cond  Expr
-	Post  Stmt
-	Body  Stmts
-	Label string
+	Cond   Expr
+	Post   Stmt
+	Body   Stmts
+	Label  string
+	Simple bool
 }
 type Branch struct {
 	Break bool // break|continue

@@ -314,6 +314,10 @@ func (s Switch) wat(w io.Writer) {
 	}
 }
 func (f For) wat(w io.Writer) {
+	if f.Simple {
+		f.simple(w)
+		return
+	}
 	l1, l2 := "", ""
 	if f.Label != "" {
 		l1, l2 = "$"+f.Label+":1", "$"+f.Label+":2"
@@ -331,6 +335,23 @@ func (f For) wat(w io.Writer) {
 	fmt.Fprintln(w, "br 0")
 	fmt.Fprintln(w, "end")
 	fmt.Fprintln(w, "end")
+}
+func (f For) simple(w io.Writer) {
+	fmt.Fprintf(w, "loop\n")
+	l := f.Body[len(f.Body)-1]
+	if b, o := l.(Branch); o {
+		if b.Break {
+			panic("simple loop must have continue as last statement")
+		}
+		f.Body[:len(f.Body)-1].wat(w) // strip continue
+	} else {
+		panic("simple loop must have continue as last statement")
+	}
+	if f.Post != nil {
+		f.Post.wat(w)
+	}
+	f.Cond.wat(w)
+	fmt.Fprintf(w, "br_if 0\nend\n")
 }
 func (b Branch) wat(w io.Writer) {
 	// assume for{ if{ break|continue } } => (block(loop(if(then br 1|2))))

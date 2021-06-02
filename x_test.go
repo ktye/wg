@@ -346,6 +346,19 @@ out:
 	return r
 }
 
+// (func $simpleloop (param $n i32) (result i32)
+// loop
+// local.get $n i32.const 1 i32.add local.tee $n
+// i32.const 10 i32.lt_s br_if 0 end
+// local.get $n)
+func simpleloop(n int32) int32 {
+	for n < 10 {
+		n++
+		continue // this marks a simple loop with an end test. In wasm it runs always at least once!
+	}
+	return n
+}
+
 // (func $brtable (param $x i32) (result i32)
 // block block block
 // i32.const 1 local.get $x i32.add

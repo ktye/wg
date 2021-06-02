@@ -274,17 +274,17 @@ func parseType(t types.Type, pos string) Type {
 }
 func (m *Module) parseBody(st []ast.Stmt) (r []Stmt) {
 	for i := range st {
-		r = append(r, m.parseStmt(st[i]))
+		r = append(r, m.parseStmt(st[i], nil))
 	}
 	return r
 }
 func (m *Module) parseStmts(v []ast.Stmt) (r Stmts) {
 	for i := range v {
-		r = append(r, m.parseStmt(v[i]))
+		r = append(r, m.parseStmt(v[i], nil))
 	}
 	return r
 }
-func (m *Module) parseStmt(st ast.Stmt) Stmt {
+func (m *Module) parseStmt(st ast.Stmt, f *For) Stmt {
 	switch v := st.(type) {
 	case *ast.AssignStmt:
 		return m.parseAssign(v)
@@ -311,7 +311,7 @@ func (m *Module) parseStmt(st ast.Stmt) Stmt {
 	case *ast.IncDecStmt:
 		return m.parseIncDec(v)
 	case *ast.BranchStmt:
-		return m.parseBranch(v)
+		return m.parseBranch(v, f)
 	case *ast.LabeledStmt:
 		if f, o := v.Stmt.(*ast.ForStmt); o {
 			return m.parseFor(f, v.Label.Name)
@@ -428,10 +428,13 @@ func (m *Module) parseIncDec(a *ast.IncDecStmt) (r Assign) {
 	r.Expr = []Expr{Literal{Type: t, Value: "1"}}
 	return r
 }
-func (m *Module) parseBranch(a *ast.BranchStmt) (r Branch) {
+func (m *Module) parseBranch(a *ast.BranchStmt, f *For) (r Branch) {
 	switch a.Tok {
 	case token.BREAK, token.CONTINUE:
 		r.Break = a.Tok == token.BREAK
+		if f != nil && a.Tok == token.CONTINUE {
+			f.Simple = true
+		}
 	default:
 		panic(position(a) + ": unsupported branch statement")
 	}
@@ -443,17 +446,17 @@ func (m *Module) parseBranch(a *ast.BranchStmt) (r Branch) {
 func (m *Module) parseIf(a *ast.IfStmt) (r Stmts) {
 	var i If
 	if a.Init != nil {
-		r = append(r, m.parseStmt(a.Init))
+		r = append(r, m.parseStmt(a.Init, nil))
 	}
 	i.If = m.parseExpr(a.Cond)
 	for _, st := range a.Body.List {
-		i.Then = append(i.Then, m.parseStmt(st))
+		i.Then = append(i.Then, m.parseStmt(st, nil))
 	}
 	if a.Else != nil {
 		if b, o := a.Else.(*ast.BlockStmt); o {
 			i.Else = m.parseStmts(b.List)
 		} else {
-			i.Else = Stmts{m.parseStmt(a.Else)}
+			i.Else = Stmts{m.parseStmt(a.Else, nil)}
 		}
 	}
 	return append(r, i)
@@ -482,12 +485,13 @@ func (m *Module) parseSwitch(a *ast.SwitchStmt) (r Switch) {
 	return r
 }
 func (m *Module) parseFor(a *ast.ForStmt, label string) (r Stmts) {
+	var f For
 	if a.Init != nil {
-		r = append(r, m.parseStmt(a.Init))
+		r = append(r, m.parseStmt(a.Init, nil))
 	}
 	var body Stmts
 	for _, st := range a.Body.List {
-		body = append(body, m.parseStmt(st))
+		body = append(body, m.parseStmt(st, &f)) // may assign f.Simple
 	}
 	var cond Expr
 	if a.Cond != nil {
@@ -495,9 +499,13 @@ func (m *Module) parseFor(a *ast.ForStmt, label string) (r Stmts) {
 	}
 	var post Stmt
 	if a.Post != nil {
-		post = m.parseStmt(a.Post)
+		post = m.parseStmt(a.Post, nil)
 	}
-	return append(r, For{Cond: cond, Post: post, Body: body, Label: label})
+	f.Cond = cond
+	f.Post = post
+	f.Body = body
+	f.Label = label
+	return append(r, f)
 }
 func catscopes(s *types.Scope) (r []*types.Scope) {
 	r = append(r, s)
