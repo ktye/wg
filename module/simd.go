@@ -199,15 +199,27 @@ func (x F64x2) Div(y F64x2) (r F64x2) {
 	r[1] = x[1] / y[1]
 	return r
 }
-func (x F64x2) Min(y F64x2) (r F64x2) {
-	r[0] = math.Min(x[0], y[0])
-	r[1] = math.Min(x[1], y[1])
+func (x F64x2) Pmin(y F64x2) (r F64x2) {
+	r[0] = pmin(x[0], y[0])
+	r[1] = pmin(x[1], y[1])
 	return r
 }
-func (x F64x2) Max(y F64x2) (r F64x2) {
-	r[0] = math.Max(x[0], y[0])
-	r[1] = math.Max(x[1], y[1])
+func (x F64x2) Pmax(y F64x2) (r F64x2) {
+	r[0] = pmax(x[0], y[0])
+	r[1] = pmax(x[1], y[1])
 	return r
+}
+func pmin(x, y float64) float64 {
+	if y < x {
+		return y
+	}
+	return x
+}
+func pmax(x, y float64) float64 {
+	if x < y {
+		return y
+	}
+	return x
 }
 
 func (x I8x16) Eq(y I8x16) (r I8x16) {

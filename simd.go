@@ -10,7 +10,7 @@ var simdops map[string]string
 
 func init() {
 	simdops = make(map[string]string)
-	for _, op := range []string{"Sqrt", "Neg", "Abs", "Add", "Sub", "Mul", "Div", "Min_s", "Max_s", "Min", "Max", "Eq", "Ne", "Lt", "Lt_s", "Gt", "Gt_s", "All_true", "Any_true"} {
+	for _, op := range []string{"Sqrt", "Neg", "Abs", "Add", "Sub", "Mul", "Div", "Min_s", "Max_s", "Pmin", "Pmax", "Eq", "Ne", "Lt", "Lt_s", "Gt", "Gt_s", "All_true", "Any_true"} {
 		for _, t := range []string{"I8x16", "I32x4", "F64x2"} {
 			s := t + "." + op
 			simdops[s] = strings.ToLower(s)
