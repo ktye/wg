@@ -88,6 +88,14 @@ func (v I8x16) Any_true() int32 {
 	}
 	return 0
 }
+func (v I32x4) Any_true() int32 {
+	for i := range v {
+		if v[i] != 0 {
+			return 1
+		}
+	}
+	return 0
+}
 func (v I8x16) Extract_lane_s0() int32 { return int32(v[0]) }
 
 func (v I8x16) Neg() (r I8x16) {

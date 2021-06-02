@@ -14,6 +14,9 @@ func init() {
 		for _, t := range []string{"I8x16", "I32x4", "F64x2"} {
 			s := t + "." + op
 			simdops[s] = strings.ToLower(s)
+			if op == "Any_true" {
+				simdops[s] = "v128.any_true"
+			}
 		}
 	}
 }
