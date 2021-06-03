@@ -49,6 +49,7 @@ func Functions(off int, funcs ...interface{}) {
 
 // Export registers the functions as exported.
 func Export(funcs ...interface{}) {}
+func ExportAll()                  {}
 
 // Data section (call after Memory)
 func Data(off int, value string) { copy(Bytes[off:], value) }

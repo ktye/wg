@@ -36,15 +36,16 @@ func (t Type) String() string {
 }
 
 type Module struct {
-	Memory  string
-	Imports map[string]Import
-	Exports map[string]bool
-	Globals []Assign
-	Funcs   []Func
-	Table   []TableEntries
-	Data    []Data
-	current *Func
-	scopes  []*types.Scope
+	Memory    string
+	Imports   map[string]Import
+	Exports   map[string]bool
+	Globals   []Assign
+	Funcs     []Func
+	Table     []TableEntries
+	Data      []Data
+	current   *Func
+	scopes    []*types.Scope
+	exportAll bool
 }
 type TableEntries struct {
 	Off   int

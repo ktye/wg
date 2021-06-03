@@ -634,9 +634,13 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 			m.Exports[f.(*ast.Ident).Name] = true
 		}
 		return Nop{}
+	case "ExportAll":
+		m.exportAll = true
+		return Nop{}
 	case "Data": // module.Data(0, "...")
 		off, _ := strconv.Atoi(a.Args[0].(*ast.BasicLit).Value)
-		data := a.Args[1].(*ast.BasicLit).Value
+		data, e := strconv.Unquote(a.Args[1].(*ast.BasicLit).Value)
+		fatal(e)
 		m.Data = append(m.Data, Data{off, data})
 		return Nop{}
 	}

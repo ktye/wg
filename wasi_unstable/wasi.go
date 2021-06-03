@@ -17,6 +17,8 @@ const (
 	ThreadCPU
 )
 
+//func L32(x int32) int32   { fmt.Println(x); return x }
+//func L64(x uint64) uint64 { fmt.Println(x); return x }
 func Clock_time_get(id ClockID, prec Timestamp, res int32) int32 {
 	module.SetI64(res, time.Now().UnixNano())
 	return 0

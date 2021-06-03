@@ -360,9 +360,9 @@ func simpleloop(n int32) int32 {
 }
 
 // (func $brtable (param $x i32) (result i32)
-// block block block
+// block block block block
 // i32.const 1 local.get $x i32.add
-// br_table 0 1 2 br 2 end
+// br_table 0 1 2 end br 2 end
 // local.get $x i32.const 2 i32.add local.set $x br 1 end
 // local.get $x i32.const 2 i32.mul local.set $x br 0 end local.get $x)
 func brtable(x int32) int32 {

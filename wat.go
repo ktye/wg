@@ -42,7 +42,7 @@ func (m Module) Wat(ww io.Writer) {
 		fmt.Fprintf(w, "(data (i32.const %d) %s)\n", d.Off, q)
 	}
 	for _, f := range m.Funcs {
-		f.Exported = m.Exports[f.Name]
+		f.Exported = m.Exports[f.Name] || m.exportAll
 		f.wat(w)
 	}
 	tmax := 0
@@ -290,7 +290,7 @@ func (i If) wat(w io.Writer) {
 	fmt.Fprintln(w, "end")
 }
 func (s Switch) wat(w io.Writer) {
-	for i := 0; i < 1+len(s.Case); i++ {
+	for i := 0; i < 2+len(s.Case); i++ {
 		fmt.Fprintln(w, "block")
 	}
 	s.E.wat(w)
@@ -304,14 +304,15 @@ func (s Switch) wat(w io.Writer) {
 	fmt.Fprintln(w, t)
 	fmt.Fprintln(w)
 	for i := 1 + len(s.Case); i != 0; i-- {
+		fmt.Fprintln(w, "end")
 		if i == 1 && s.Def != nil {
 			s.Def.wat(w)
 		} else if i > 1 {
 			s.Case[1+len(s.Case)-i].wat(w)
 		}
 		fmt.Fprintf(w, "br %d\n", i-1)
-		fmt.Fprintln(w, "end")
 	}
+	fmt.Fprintln(w, "end")
 }
 func (f For) wat(w io.Writer) {
 	if f.Simple {
