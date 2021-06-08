@@ -10,12 +10,13 @@ var simdops map[string]string
 
 func init() {
 	simdops = make(map[string]string)
-	for _, op := range []string{"Sqrt", "Neg", "Abs", "Add", "Sub", "Mul", "Div", "Min_s", "Max_s", "Pmin", "Pmax", "Eq", "Ne", "Lt", "Lt_s", "Gt", "Gt_s", "All_true", "Any_true"} {
+	for _, op := range []string{"Sqrt", "Neg", "Abs", "Add", "Sub", "Mul", "Div", "Min_s", "Max_s", "Pmin", "Pmax", "Eq", "Ne", "Lt", "Lt_s", "Gt", "Gt_s", "And", "All_true", "Any_true"} {
 		for _, t := range []string{"I8x16", "I32x4", "F64x2"} {
 			s := t + "." + op
 			simdops[s] = strings.ToLower(s)
-			if op == "Any_true" {
-				simdops[s] = "v128.any_true"
+			switch op {
+			case "Any_true", "And", "Or", "Xor", "Not":
+				simdops[s] = "v128." + strings.ToLower(op) // prefix is v128 not i8x16..
 			}
 		}
 	}

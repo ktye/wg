@@ -1,6 +1,8 @@
 package module
 
-import "math"
+import (
+	"math"
+)
 
 // Simd v128
 type I8x16 [16]int8
@@ -137,6 +139,12 @@ func (x I8x16) Min_s(y I8x16) (r I8x16) {
 func (x I8x16) Max_s(y I8x16) (r I8x16) {
 	for i := range r {
 		r[i] = maxi8(x[i], y[i])
+	}
+	return r
+}
+func (x I8x16) And(y I8x16) (r I8x16) {
+	for i := range r {
+		r[i] = x[i] & y[i]
 	}
 	return r
 }
