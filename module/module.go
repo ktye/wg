@@ -7,7 +7,11 @@ import (
 )
 
 // Memory creates a linear memory with size blocks*64kB.
-func Memory(blocks int) { Bytes = make([]byte, 64*1024*blocks) }
+func Memory(blocks int) {
+	if Bytes == nil {
+		Bytes = make([]byte, 64*1024*blocks)
+	}
+}
 
 var Bytes []byte
 
