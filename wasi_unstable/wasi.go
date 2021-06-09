@@ -54,3 +54,23 @@ func Fd_write(fd, p, niovec, written int32) int32 {
 	return 1
 }
 func Proc_exit(x int32) { os.Exit(int(x)) }
+
+func Args_sizes_get(np, sp int32) int32 {
+	s, n := getargs()
+	module.SetI32(np, n)
+	module.SetI32(sp, int32(len(s)))
+	return 0
+}
+func Args_get(p, sp int32) int32 {
+	s, _ := getargs()
+	copy(module.Bytes[sp:], s)
+	return 0
+}
+func getargs() (r []byte, n int32) {
+	for _, a := range os.Args {
+		r = append(r, []byte(a)...)
+		r = append(r, 0)
+		n++
+	}
+	return r, n
+}
