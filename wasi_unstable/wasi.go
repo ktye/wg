@@ -53,7 +53,15 @@ func Fd_write(fd, p, niovec, written int32) int32 {
 	}
 	return 1
 }
-func Proc_exit(x int32) { os.Exit(int(x)) }
+func Fd_seek(fp int32, offset int64, whence int32, rp int32) int32 {
+	return 0
+}
+func Path_open(fd, dirflags, path, pathlen, oflags int32, baserights, inheritrights int64, fdflags, newfp int32) int32 {
+	return 0
+}
+
+func Fd_close(x int32) int32 { return 0 }
+func Proc_exit(x int32)      { os.Exit(int(x)) }
 
 func Args_sizes_get(np, sp int32) int32 {
 	s, n := getargs()
