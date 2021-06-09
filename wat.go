@@ -249,8 +249,8 @@ func (c Call) call(w io.Writer) {
 	case "I32clz", "I64clz", "I32ctz", "I64ctz", "I32popcnt", "I64popcnt", "F64abs", "F64sqrt", "F64ceil", "F64floor", "F64nearest", "F64min", "F64max", "F64copysign", "I64reinterpret_f64", "F64reinterpret_i64", "I32reinterpret_f32", "F32reinterpret_i32":
 		op = fmt.Sprintf("%s.%s", strings.ToLower(c.Func[:3]), c.Func[3:])
 
-	// bulk memory
-	case "Memorycopy", "Memoryfill":
+	// memory / bulk memory
+	case "Memorysize", "Memorygrow", "Memorycopy", "Memoryfill":
 		op = fmt.Sprintf("memory.%s", c.Func[6:])
 
 	default:

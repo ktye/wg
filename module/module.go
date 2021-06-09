@@ -12,6 +12,12 @@ func Memory(blocks int) {
 		Bytes = make([]byte, 64*1024*blocks)
 	}
 }
+func Memorysize() int32 { return int32(len(Bytes) >> 16) }
+func Memorygrow(blocks int32) (previous int32) {
+	previous = int32(len(Bytes) >> 16)
+	Bytes = append(Bytes, make([]byte, 64*1024*blocks)...)
+	return previous
+}
 
 var Bytes []byte
 
