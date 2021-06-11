@@ -76,7 +76,7 @@ func absi32(x int32) int32 {
 
 func (v I8x16) All_true() int32 {
 	for i := range v {
-		if v[i] != 0 {
+		if (v[i] != 0) == false {
 			return 0
 		}
 	}
