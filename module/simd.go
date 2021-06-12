@@ -148,6 +148,12 @@ func (x I8x16) And(y I8x16) (r I8x16) {
 	}
 	return r
 }
+func (x I8x16) Not() (r I8x16) {
+	for i := range r {
+		r[i] = ^x[i]
+	}
+	return r
+}
 
 func (v I32x4) Neg() (r I32x4) {
 	for i := range r {
