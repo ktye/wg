@@ -174,6 +174,13 @@ func varassign2(x int32) int32 {
 	return a - b
 }
 
+// (func $drop (result i32) (local $a i32)
+// i32.const 1 call $dup drop local.tee $a)
+func drop() int32 {
+	a, _ := dup(1)
+	return a
+}
+
 // (func $localstruct (param $x i64) (result i32) (result i64)
 // (local $s.st1.a i32) (local $s.a i64)
 // local.get $x local.set $s.a local.get $s.st1.a local.get $s.a)

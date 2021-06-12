@@ -146,6 +146,13 @@ func (m *Module) parseFunc(a *ast.FuncDecl) (f Func) {
 	}
 	f.Body = m.parseBody(a.Body.List)
 	f.Doc = a.Doc.Text()
+	locs := f.Locs
+	f.Locs = nil
+	for _, v := range locs {
+		if v.Name != "_" {
+			f.Locs = append(f.Locs, v)
+		}
+	}
 	return f
 }
 func parseArgs(a []*ast.Field) (r []Arg) {
