@@ -101,6 +101,7 @@ func Args_sizes_get(np, sp int32) int32 {
 }
 func Args_get(p, sp int32) int32 {
 	s, _ := getargs()
+	// p (**argv) is ignored
 	copy(module.Bytes[sp:], s)
 	return 0
 }
