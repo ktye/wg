@@ -253,6 +253,9 @@ func (c Call) call(w io.Writer) {
 	case "Memorysize", "Memorygrow", "Memorycopy", "Memoryfill":
 		op = fmt.Sprintf("memory.%s", c.Func[6:])
 
+	case "Nop":
+		op = fmt.Sprintf("nop")
+
 	default:
 		if simd(c.Func, w) {
 			return
