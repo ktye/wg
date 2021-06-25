@@ -13,10 +13,9 @@ func TestWg(t *testing.T) {
 
 	for _, f := range m.Funcs {
 		var buf bytes.Buffer
-		w := newIndent(&buf)
+		//w := newIndent(&buf)
 		f.Exported = m.Exports[f.Name]
-		f.wat(w)
-		w.Write(nil)
+		f.wat(&buf)
 		got := trim(string(buf.Bytes()))
 		exp := trim(f.Doc)
 		if got != exp {

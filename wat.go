@@ -1,6 +1,7 @@
 package wg
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strconv"
@@ -9,8 +10,7 @@ import (
 
 // convert wg ast to webassembly text format
 
-func (m Module) Wat(ww io.Writer) {
-	var w = newIndent(ww)
+func (m Module) Wat(w io.Writer) {
 	fmt.Fprintf(w, "(module\n")
 	for _, i := range m.Imports {
 		i.wat(w)
@@ -60,7 +60,6 @@ func (m Module) Wat(ww io.Writer) {
 		fmt.Fprintf(w, ")\n")
 	}
 	fmt.Fprintf(w, ")\n")
-	w.Write(nil)
 }
 func (s Stmts) wat(w io.Writer) {
 	for _, st := range s {
@@ -108,9 +107,12 @@ func (f Func) wat(w io.Writer) {
 			f.Body[len(f.Body)-1] = r
 		}
 	}
+	var buf bytes.Buffer
 	for _, st := range f.Body {
-		st.wat(w)
+		st.wat(&buf)
 	}
+	b := optimize(buf.Bytes())
+	w.Write(b)
 	fmt.Fprintf(w, ")\n")
 }
 
@@ -438,56 +440,57 @@ func init() {
 	//   i{32,64}.trunc_sat_f{32,64}_[su]
 }
 
-type indent struct {
-	io.Writer
-	l int
-	s string
+func optimize(b []byte) (r []byte) {
+	if len(b) > 0 && b[len(b)-1] == 10 { // prevent last empty word
+		b = b[:len(b)-1]
+	}
+	w := bytes.Split(b, []byte{10})
+	s := make([]string, len(w))
+	for i := range w {
+		s[i] = string(w[i])
+	}
+	s = optTee(s)
+	s = indent(s)
+	for i, x := range s {
+		if i > 0 {
+			r = append(r, 10)
+		}
+		r = append(r, []byte(x)...)
+	}
+	return r
+}
+func optTee(w []string) []string {
+	j := 0
+	for i := 0; i < len(w); i++ {
+		if i < len(w)-1 {
+			a, b := w[i], w[i+1]
+			if strings.HasPrefix(a, "local.set") && strings.HasPrefix(b, "local.get") {
+				if v := a[10:]; v == b[10:] {
+					i++
+					w[i] = "local.tee " + v
+				}
+			}
+		}
+		w[j] = w[i]
+		j++
+	}
+	return w[:j]
 }
 
-func newIndent(w io.Writer) *indent {
-	i := indent{Writer: w}
-	return &i
-}
-func (w *indent) Write(p []byte) (n int, err error) {
-	s := string(p)
-
-	w.s, s = tee(w.s, s)
-	if strings.HasSuffix(w.s, "\n") && s == ")\n" {
-		w.s = strings.TrimSuffix(w.s, "\n")
-	}
-	if w.s != "" {
-		if strings.HasSuffix(w.s, "\n") {
-			w.s += strings.Repeat(" ", w.l)
+func indent(w []string) []string {
+	l := 1
+	for i, s := range w {
+		if s == "else" || s == "end" {
+			l--
+			if l < 0 {
+				l = 0
+			}
 		}
-		_, err = w.Writer.Write([]byte(w.s))
-		if err != nil {
-			return 0, err
+		b := strings.Repeat(" ", l)
+		w[i] = b + s
+		if s == "if" || s == "else" || strings.HasPrefix(s, "block ") || strings.HasPrefix(s, "loop ") {
+			l++
 		}
 	}
-	w.s = s
-
-	switch s {
-	case "if\n":
-		w.l++
-	case "end\n", ")\n":
-		w.l--
-		if w.l < 0 {
-			w.l = 0
-		}
-	}
-	if strings.HasPrefix(s, "block ") || strings.HasPrefix(s, "loop ") {
-		w.l++
-	}
-	if strings.HasPrefix(s, "(func ") {
-		w.l = 1
-	}
-	return len(p), nil
-}
-func tee(a, b string) (string, string) {
-	if strings.HasPrefix(a, "local.set $") && strings.HasPrefix(b, "local.get $") {
-		if v := a[11:]; v == b[11:] {
-			return "", "local.tee $" + v
-		}
-	}
-	return a, b
+	return w
 }
