@@ -253,9 +253,6 @@ func (c Call) call(w io.Writer) {
 	case "Memorysize", "Memorygrow", "Memorycopy", "Memoryfill":
 		op = fmt.Sprintf("memory.%s", c.Func[6:])
 
-	case "Nop":
-		op = fmt.Sprintf("nop")
-
 	default:
 		if simd(c.Func, w) {
 			return
@@ -301,9 +298,7 @@ func (s Switch) wat(w io.Writer) {
 	for i := range s.Case {
 		t += " " + strconv.Itoa(i)
 	}
-	if s.Def != nil {
-		t += " " + strconv.Itoa(len(s.Case))
-	}
+	t += " " + strconv.Itoa(len(s.Case))
 	fmt.Fprintln(w, t)
 	fmt.Fprintln(w)
 	for i := 1 + len(s.Case); i != 0; i-- {
