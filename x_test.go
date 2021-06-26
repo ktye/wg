@@ -282,6 +282,15 @@ func ifinit(x int32) int32 {
 	return x
 }
 
+// (func $notzero (param $x i32) (result i32)
+// local.get $x if i32.const 0 return end local.get $x)
+func notzero(x int32) int32 {
+	if x != 0 {
+		return 0
+	}
+	return x
+}
+
 // (func $while (param $n i32) (result i32) (local $r i32)
 // block loop local.get $n i32.const 0 i32.gt_s i32.eqz br_if 1
 // local.get $r i32.const 1 i32.add local.set $r br 0 end end
@@ -294,7 +303,7 @@ func while(n int32) (r int32) {
 }
 
 // (func $forloop (param $n i32) (result i32) (local $r i32) (local $i.1 i32)
-// i32.const 0 local.set $i.1 block loop local.get $i.1 local.get $n i32.lt_s i32.eqz br_if 1
+// i32.const 0 local.set $i.1 block loop local.get $i.1 local.get $n i32.ge_s br_if 1
 // local.get $r local.get $i.1 i32.add local.set $r local.get $i.1 i32.const 1 i32.add local.set $i.1 br 0 end end local.get $r)
 func forloop(n int32) (r int32) {
 	for i := int32(0); i < n; i++ {
@@ -336,7 +345,7 @@ func forcontinue(n int32) (r int32) {
 
 // (func $forlabel (param $n i32) (result i32) (local $r i32) (local $i.1 i32)
 // i32.const 0 local.set $i.1
-// block $out:1 loop $out:2 local.get $i.1 local.get $n i32.lt_s i32.eqz br_if 1
+// block $out:1 loop $out:2 local.get $i.1 local.get $n i32.ge_s br_if 1
 // block loop local.get $r i32.const 5 i32.eq if br $out:1 end
 // local.get $r   i32.const 1 i32.add local.set $r br 0 end end
 // local.get $i.1 i32.const 1 i32.add local.set $i.1 br 0 end end local.get $r)
@@ -386,7 +395,7 @@ func brtable(x int32) int32 {
 // (func $scope (result i32) (local $i i32) (local $i.1 i32)
 // i32.const 1 local.set $i
 // i32.const 0 local.set $i.1
-// block loop local.get $i.1 i32.const 5 i32.lt_s i32.eqz br_if 1
+// block loop local.get $i.1 i32.const 5 i32.ge_s br_if 1
 // local.get $i.1 i32.const 1 i32.add local.set $i.1 br 0 end end local.get $i)
 func scope() int32 {
 	i := int32(1)

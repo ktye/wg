@@ -327,7 +327,7 @@ func (f For) wat(w io.Writer) {
 	fmt.Fprintf(w, "loop %s\n", l2)
 	if f.Cond != nil {
 		f.Cond.wat(w)
-		fmt.Fprintf(w, "i32.eqz br_if 1\n")
+		fmt.Fprintf(w, "i32.eqz\nbr_if 1\n")
 	}
 	f.Body.wat(w)
 	if f.Post != nil {
@@ -449,8 +449,10 @@ func optimize(b []byte) (r []byte) {
 	for i := range w {
 		s[i] = string(w[i])
 	}
-	s = optTee(s)
-	s = indent(s)
+	f := []func([]string) []string{optTee, optNot0, optWhileLts, indent}
+	for i := range f {
+		s = f[i](s)
+	}
 	for i, x := range s {
 		if i > 0 {
 			r = append(r, 10)
@@ -476,6 +478,38 @@ func optTee(w []string) []string {
 	}
 	return w[:j]
 }
+func optNot0(w []string) []string { return replace(w, "i32.const 0;i32.ne;if", "if") }
+func optWhileLts(w []string) []string {
+	return replace(w, "i32.lt_s;i32.eqz;br_if 1", "i32.ge_s;br_if 1")
+}
+func replace(w []string, pat, rep string) []string {
+	p, r := strings.Split(pat, ";"), strings.Split(rep, ";")
+	if len(r) > len(p) {
+		panic("long replacement")
+	}
+	k := 0
+f:
+	for i := 0; i < len(w); i++ {
+		if i < 1+len(w)-len(p) {
+			for j := 0; j < len(p); j++ {
+				if w[i+j] != p[j] {
+					break
+				}
+				if j == len(p)-1 {
+					for n := 0; n < len(r); n++ {
+						w[k+n] = r[n]
+					}
+					i += len(p) - 1
+					k += len(r)
+					continue f
+				}
+			}
+		}
+		w[k] = w[i]
+		k++
+	}
+	return w[:k]
+}
 
 func indent(w []string) []string {
 	l := 1
@@ -488,7 +522,7 @@ func indent(w []string) []string {
 		}
 		b := strings.Repeat(" ", l)
 		w[i] = b + s
-		if s == "if" || s == "else" || strings.HasPrefix(s, "block ") || strings.HasPrefix(s, "loop ") {
+		if s == "if" || s == "else" || strings.HasPrefix(s, "block") || strings.HasPrefix(s, "loop") {
 			l++
 		}
 	}
