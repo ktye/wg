@@ -241,6 +241,9 @@ func (c Call) call(w io.Writer) {
 	case "F32", "F64":
 		op = fmt.Sprintf("f%s.load", c.Func[1:])
 
+	case "I32B":
+		return //bool2i32 (nop)
+
 	// store
 	case "SetI8", "SetI16":
 		op = fmt.Sprintf("i32.store%s", c.Func[4:])

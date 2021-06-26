@@ -73,6 +73,13 @@ func Memoryfill(dst, val, n int32) {
 	}
 }
 
+func I32B(b bool) int32 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 // Direct wasm opcodes
 func I32clz(x uint32) int32    { return int32(bits.LeadingZeros32(x)) }
 func I64clz(x uint64) int64    { return int64(bits.LeadingZeros64(x)) }
