@@ -599,9 +599,9 @@ func parseLiteral(a *ast.BasicLit, xt types.Type) (r Literal) {
 	return r
 }
 func (m *Module) parseReturn(a *ast.ReturnStmt) (r Return) {
-	r.List = make([]Expr, len(a.Results))
+	r = make(Return, len(a.Results))
 	for i, x := range a.Results {
-		r.List[i] = m.parseExpr(x)
+		r[i] = m.parseExpr(x)
 	}
 	return r
 }

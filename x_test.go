@@ -249,15 +249,28 @@ func iff(x int32) int32 {
 }
 
 // (func $ifelse (param $x i32) (result i32)
-// local.get $x i32.const 0 i32.gt_s if i32.const 2 local.get $x i32.mul return
-// else local.get $x return end local.get $x)
+// local.get $x i32.const 0 i32.gt_s if (result i32) i32.const 2 local.get $x i32.mul
+// else local.get $x end)
 func ifelse(x int32) int32 {
 	if x > 0 {
 		return 2 * x
 	} else {
 		return x
 	}
-	return x // unreached
+}
+
+// (func $valueif (param $x i32) (result i32) (local $r i32)
+// local.get $x i32.const 0 i32.gt_s if (result i32) local.get $x else
+// local.get $x i32.const 1 i32.add local.tee $x end
+// local.tee $r)
+func valueif(x int32) (r int32) {
+	if x > 0 { // if all branches assign to a variable, move it outwards
+		r = x
+	} else {
+		x++
+		r = x
+	}
+	return r
 }
 
 // (func $elseif (param $x i32) (result i32)

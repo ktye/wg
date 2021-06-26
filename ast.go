@@ -88,10 +88,7 @@ type Assign struct { //Stmt
 	Typs  []Type
 	Mod   string
 }
-type Return struct { //Stmt
-	Last bool
-	List []Expr
-}
+type Return []Expr //Stmt
 type Drop struct {
 	Expr
 }

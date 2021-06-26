@@ -81,6 +81,12 @@ func (m Import) wat(w io.Writer) {
 	res := arglist(m.Res, "(result")
 	fmt.Fprintf(w, "(import \"%s\" \"%s\" (func $%s.%s %s %s))\n", m.Package, m.Func, m.Package, m.Func, arg, res)
 }
+
+type fw struct {
+	io.Writer
+	f Func // access to current function (e.g. return types)
+}
+
 func (f Func) wat(w io.Writer) {
 	name := f.Name
 	if name == "main" {
@@ -101,15 +107,10 @@ func (f Func) wat(w io.Writer) {
 		fmt.Fprintf(w, " (local $%s %s)", a.Name, a.Type)
 	}
 	fmt.Fprintf(w, "\n")
-	if len(f.Body) > 0 {
-		if r, o := f.Body[len(f.Body)-1].(Return); o {
-			r.Last = true
-			f.Body[len(f.Body)-1] = r
-		}
-	}
 	var buf bytes.Buffer
+	fw := fw{Writer: &buf, f: f}
 	for _, st := range f.Body {
-		st.wat(&buf)
+		st.wat(fw)
 	}
 	b := optimize(buf.Bytes())
 	w.Write(b)
@@ -148,12 +149,10 @@ func (a Assign) wat(w io.Writer) {
 	}
 }
 func (r Return) wat(w io.Writer) {
-	for _, e := range r.List {
+	for _, e := range r {
 		e.wat(w)
 	}
-	if r.Last == false {
-		fmt.Fprintln(w, "return")
-	}
+	fmt.Fprintln(w, "return")
 }
 func (r Drop) wat(w io.Writer) {
 	r.Expr.wat(w)
@@ -281,18 +280,86 @@ func (c Cast) wat(w io.Writer) {
 	}
 }
 func (i If) wat(w io.Writer) {
+	th, el, name, typ, ret := i.value()
+	if ret {
+		typ = w.(fw).f.Rets[0]
+	}
 	i.If.wat(w)
 	fmt.Fprintln(w, "if")
-	for _, t := range i.Then {
+	if typ != "" {
+		fmt.Fprintf(w, "(result %s)\n", typ)
+	}
+	for _, t := range th {
 		t.wat(w)
 	}
-	if i.Else != nil {
+	if el != nil {
 		fmt.Fprintln(w, "else")
-		for _, e := range i.Else {
+		for _, e := range el {
 			e.wat(w)
 		}
 	}
 	fmt.Fprintln(w, "end")
+	if name != "" {
+		fmt.Fprintf(w, "local.set $%s\n", name)
+	} else if ret {
+		fmt.Fprintln(w, "return")
+	}
+}
+func (i If) value() (th Stmts, el Stmts, name string, typ Type, ret bool) {
+	var r []Stmts
+	var ok bool
+	if i.Else == nil {
+		return i.Then, i.Else, "", "", false
+	}
+	r, name, typ, ret, ok = valueStatements([]Stmts{i.Then, i.Else})
+	th, el = i.Then, i.Else
+	if ok {
+		th, el = r[0], r[1]
+	} else {
+		name, typ, ret = "", "", false
+	}
+	return
+}
+
+// valueStatements tests if multiple statements of an if/else or switch all end with and assigment
+// to a local variable or a return. The assigment or return can be moved outwards.
+func valueStatements(v []Stmts) (r []Stmts, name string, typ Type, ret bool, ok bool) {
+	las := func(stmts Stmts) (Stmts, string, Type, bool, bool) {
+		if len(stmts) > 0 {
+			st := stmts[len(stmts)-1]
+			if a, o := st.(Assign); o && len(a.Name) == 1 && a.Mod == "=" && a.Glob[0] == false {
+				r := make(Stmts, len(stmts))
+				copy(r, stmts[:len(stmts)-1])
+				r[len(r)-1] = a.Expr[0]
+				return r, a.Name[0], a.Typs[0], false, true
+			}
+
+			if rt, o := st.(Return); o && len(rt) == 1 {
+				r := make(Stmts, len(stmts))
+				copy(r, stmts[:len(stmts)-1])
+				r[len(r)-1] = rt[0]
+				return r, "", "", true, true
+			}
+
+		}
+		return nil, "", "", false, false
+	}
+	s, name, typ, ret, ok := las(v[0])
+	if ok == false {
+		r, ret, ok = v, false, false
+		return
+	}
+	r = append(r, s)
+	for _, st := range v[1:] {
+		s, n, t, rt, o := las(st)
+		if o && n == name && t == typ && rt == ret {
+			r = append(r, s)
+		} else {
+			r, ret, ok = v, false, false
+			return
+		}
+	}
+	return r, name, typ, ret, ok
 }
 func (s Switch) wat(w io.Writer) {
 	for i := 0; i < 2+len(s.Case); i++ {
@@ -452,7 +519,7 @@ func optimize(b []byte) (r []byte) {
 	for i := range w {
 		s[i] = string(w[i])
 	}
-	f := []func([]string) []string{optTee, optNot0, optWhileLts, indent}
+	f := []func([]string) []string{optRet, optTee, optNot0, optWhileLts, indent}
 	for i := range f {
 		s = f[i](s)
 	}
@@ -463,6 +530,12 @@ func optimize(b []byte) (r []byte) {
 		r = append(r, []byte(x)...)
 	}
 	return r
+}
+func optRet(w []string) []string {
+	if len(w) > 0 && w[len(w)-1] == "return" {
+		w = w[:len(w)-1]
+	}
+	return w
 }
 func optTee(w []string) []string {
 	j := 0
