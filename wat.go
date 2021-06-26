@@ -362,27 +362,53 @@ func valueStatements(v []Stmts) (r []Stmts, name string, typ Type, ret bool, ok 
 	return r, name, typ, ret, ok
 }
 func (s Switch) wat(w io.Writer) {
-	for i := 0; i < 2+len(s.Case); i++ {
+	cs, def, name, typ, ret := s.value()
+	if ret {
+		typ = w.(fw).f.Rets[0]
+	}
+	for i := 0; i < 2+len(cs); i++ {
 		fmt.Fprintln(w, "block")
+		if typ != "" && i == 0 {
+			fmt.Fprintf(w, "(result %s)\n", typ)
+		}
 	}
 	s.E.wat(w)
 	t := "br_table"
-	for i := range s.Case {
+	for i := range cs {
 		t += " " + strconv.Itoa(i)
 	}
-	t += " " + strconv.Itoa(len(s.Case))
+	t += " " + strconv.Itoa(len(cs))
 	fmt.Fprintln(w, t)
-	fmt.Fprintln(w)
-	for i := 1 + len(s.Case); i != 0; i-- {
+	for i := 1 + len(cs); i != 0; i-- {
 		fmt.Fprintln(w, "end")
-		if i == 1 && s.Def != nil {
-			s.Def.wat(w)
+		if i == 1 && def != nil {
+			def.wat(w)
 		} else if i > 1 {
-			s.Case[1+len(s.Case)-i].wat(w)
+			cs[1+len(cs)-i].wat(w)
 		}
 		fmt.Fprintf(w, "br %d\n", i-1)
 	}
 	fmt.Fprintln(w, "end")
+	if name != "" {
+		fmt.Fprintf(w, "local.set $%s\n", name)
+	} else if ret {
+		fmt.Fprintln(w, "return")
+	}
+}
+func (s Switch) value() (cs []Stmts, def Stmts, name string, typ Type, ret bool) {
+	var r []Stmts
+	var ok bool
+	if s.Def == nil {
+		return s.Case, s.Def, "", "", false
+	}
+	r, name, typ, ret, ok = valueStatements(append(s.Case, s.Def))
+	cs, def = s.Case, s.Def
+	if ok {
+		cs, def = r[:len(r)-1], r[len(r)-1]
+	} else {
+		name, typ, ret = "", "", false
+	}
+	return
 }
 func (f For) wat(w io.Writer) {
 	if f.Simple {

@@ -405,6 +405,31 @@ func brtable(x int32) int32 {
 	return x
 }
 
+// (func $switchexpr (param $x i32) (result i32)
+// block (result i32) block block local.get $x br_table 0 1 end
+// i32.const 2 br 1 end i32.const 3 br 0 end local.tee $x)
+func switchexpr(x int32) int32 {
+	switch x {
+	case 0:
+		x = 2
+	default:
+		x = 3
+	}
+	return x
+}
+
+// (func $switchret (param $x i32) (result i32)
+// block (result i32) block block local.get $x br_table 0 1 end
+// i32.const 2 br 1 end i32.const 3 br 0 end)
+func switchret(x int32) int32 {
+	switch x {
+	case 0:
+		return 2
+	default:
+		return 3
+	}
+}
+
 // (func $scope (result i32) (local $i i32) (local $i.1 i32)
 // i32.const 1 local.set $i
 // i32.const 0 local.set $i.1
