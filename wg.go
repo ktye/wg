@@ -648,7 +648,15 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 		off, _ := strconv.Atoi(a.Args[0].(*ast.BasicLit).Value)
 		data, e := strconv.Unquote(a.Args[1].(*ast.BasicLit).Value)
 		fatal(e)
-		m.Data = append(m.Data, Data{off, data})
+		add := true
+		for i := range m.Data { // some Data-calls are parsed twice. why?
+			if m.Data[i].Off == off {
+				add = false
+			}
+		}
+		if add {
+			m.Data = append(m.Data, Data{off, data})
+		}
 		return Nop{}
 	}
 	if s, o := a.Fun.(*ast.SelectorExpr); o { //method receiver
