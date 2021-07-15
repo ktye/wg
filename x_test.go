@@ -19,6 +19,10 @@ func init() {
 // local.get $x local.get $y i32.add)
 func Add(x, y int32) int32 { return x + y }
 
+// (func $Add1 (param $x i64) (result i64)
+// local.get $x i64.const 1 i64.add)
+func Add1(x int64) int64 { return x + 1 }
+
 // (func $niladic)
 func niladic() {}
 
@@ -41,6 +45,12 @@ func rel(x, y int32) bool { return x > 0 && y < 0 }
 // (func $unsign (param $x i32) (result i32)
 // local.get $x i32.const 3 i32.shr_u)
 func unsign(x uint32) uint32 {
+	return x >> 3
+}
+
+// (func $shift (param $x i64) (result i64)
+// local.get $x i64.const 3 i64.shr_u)
+func shift(x uint64) uint64 {
 	return x >> 3
 }
 

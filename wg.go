@@ -582,7 +582,7 @@ func (m *Module) parseSimdMethod(a ast.Node, argv []ast.Expr) Expr {
 }
 func parseLiteral(a *ast.BasicLit, xt types.Type) (r Literal) {
 	var t Type
-	if b, o := info.TypeOf(a).(*types.Basic); o && b.Kind() == types.UntypedInt && xt != nil {
+	if b, o := info.TypeOf(a).(*types.Basic); o && (b.Kind() == types.UntypedInt || b.Kind() == types.Uint) && xt != nil {
 		t = parseType(xt, position(a))
 	} else {
 		t = parseType(info.TypeOf(a), position(a))
