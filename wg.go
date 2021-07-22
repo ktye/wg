@@ -401,7 +401,11 @@ func (m *Module) parseDeclSpec(s ast.Spec, globalscope int, tok token.Token) (r 
 		for i, e := range v.Values {
 			if tok == token.CONST {
 				t := info.Types[e]
-				r.Expr = append(r.Expr, Literal{Type: parseType(t.Type, position(e)), Value: fmt.Sprint(t.Value)})
+				v := fmt.Sprint(t.Value)
+				if l, ok := e.(*ast.BasicLit); ok {
+					v = l.Value
+				}
+				r.Expr = append(r.Expr, Literal{Type: parseType(t.Type, position(e)), Value: v})
 				r.Const[i] = true
 			} else {
 				r.Expr = append(r.Expr, m.parseExpr(e))

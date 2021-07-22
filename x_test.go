@@ -7,6 +7,8 @@ import (
 	"github.com/ktye/wg/wasi_unstable"
 )
 
+const pi float64 = 3.141592653589793
+
 // Init sets up the module. The function is not compiled to wasm.
 func init() {
 	Memory(1)
