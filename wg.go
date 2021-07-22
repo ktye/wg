@@ -582,10 +582,10 @@ func (m *Module) parseSimdMethod(a ast.Node, argv []ast.Expr) Expr {
 }
 func parseLiteral(a *ast.BasicLit, xt types.Type) (r Literal) {
 	var t Type
-	if b, o := info.TypeOf(a).(*types.Basic); o && (b.Kind() == types.UntypedInt || b.Kind() == types.Uint) && xt != nil {
+	if b, o := info.TypeOf(a).(*types.Basic); o && (b.Kind() == types.UntypedInt || b.Kind() == types.Uint || b.Kind() == types.Int) && xt != nil {
 		t = parseType(xt, position(a))
 	} else {
-		t = parseType(info.TypeOf(a), position(a))
+		t = parseType(info.TypeOf(a).Underlying(), position(a))
 	}
 	r = Literal{
 		Type:  t,
@@ -612,7 +612,12 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 			panic(p + ": expected cast with 1 argument")
 		}
 		arg := a.Args[0]
-		return Cast{Dst: parseType(t, p), Src: parseType(info.TypeOf(arg).Underlying(), p), Arg: m.parseExpr(arg)}
+		r := Cast{Dst: parseType(t, p), Src: parseType(info.TypeOf(arg).Underlying(), p), Arg: m.parseExpr(arg)}
+		if l, ok := r.Arg.(Literal); ok && l.Type == I32 && r.Dst == I64 {
+			l.Type = I64
+			r.Arg = l
+		}
+		return r
 	}
 	if ic, o := a.Fun.(*ast.TypeAssertExpr); o {
 		return m.parseCallIndirect(ic, a.Args)
@@ -756,8 +761,13 @@ func (m *Module) parseGets(a ast.Node) Expr {
 func (m *Module) parseExpr(a ast.Expr) Expr {
 	switch v := a.(type) {
 	case *ast.UnaryExpr:
+		x := m.parseExpr(v.X)
+		if l, ok := x.(Literal); ok && v.Op.String() == "-" {
+			l.Value = "-" + l.Value
+			return l
+		}
 		return Unary{
-			X:  m.parseExpr(v.X),
+			X:  x,
 			Op: Op{Name: v.Op.String(), Type: parseType(info.TypeOf(v.X), position(v))},
 		}
 	case *ast.BinaryExpr:

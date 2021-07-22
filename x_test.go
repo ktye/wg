@@ -54,6 +54,12 @@ func shift(x uint64) uint64 {
 	return x >> 3
 }
 
+// (func $negint (param $x i64) (result i64)
+// i64.const -2 local.get $x i64.mul)
+func negint(x int64) int64 {
+	return int64(-2) * x
+}
+
 // custom types
 type I int64
 
@@ -145,12 +151,6 @@ func callmethod1(s st1) int32 { return s.method1() }
 // (func $callinner1 (param $s.st1.a i32) (param $s.a i64) (result i32)
 // local.get $s.st1.a call $st1.method1)
 func callinner1(s st2) int32 { return s.st1.method1() }
-
-/* not supported: direct method call of an embedded field
-// (func $callinner2 (param $s.st1.a i32) (param $s.a i64) (result i32)
-// local.get $s.st1.a call $st1.method1)
-func callinner2(s st2) int32 { return s.method1() }
-*/
 
 type f2 func(int32, int32) int32
 
