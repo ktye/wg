@@ -2,6 +2,7 @@ package wasi_unstable
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"time"
@@ -17,6 +18,11 @@ const (
 	Monotonic
 	ProcessCPU
 	ThreadCPU
+)
+
+var (
+	Stdout io.Writer = os.Stdout
+	Stdin  io.Reader = os.Stdin
 )
 
 //func L32(x int32) int32   { fmt.Println(x); return x }
@@ -35,7 +41,7 @@ func Fd_read(fd, p, niovec, written int32) int32 {
 	addr := module.I32(p)
 	n := module.I32(4 + p)
 	if fd == 0 {
-		nr, err := os.Stdin.Read(module.Bytes[addr : addr+n])
+		nr, err := Stdin.Read(module.Bytes[addr : addr+n])
 		module.SetI32(written, int32(nr))
 		if err == nil {
 			return 0
@@ -57,7 +63,7 @@ func Fd_write(fd, p, niovec, written int32) int32 {
 	n := module.I32(4 + p)
 	b := module.Bytes[addr : addr+n]
 	if fd == 1 {
-		nw, err := os.Stdout.Write(b)
+		nw, err := Stdout.Write(b)
 		module.SetI32(written, int32(nw))
 		if err == nil {
 			return 0
