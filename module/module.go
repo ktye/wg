@@ -2,6 +2,7 @@ package module
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/bits"
 )
@@ -15,7 +16,12 @@ func Memory(blocks int) {
 func Memorysize() int32 { return int32(len(Bytes) >> 16) }
 func Memorygrow(blocks int32) (previous int32) {
 	previous = int32(len(Bytes) >> 16)
-	Bytes = append(Bytes, make([]byte, 64*1024*blocks)...)
+	delta := 64 * 1024 * int(blocks)
+	fmt.Println("grow", blocks, (len(Bytes) + delta))
+	if len(Bytes)+delta > (1<<32 - 1) {
+		return -1
+	}
+	Bytes = append(Bytes, make([]byte, delta)...)
 	return previous
 }
 
