@@ -130,6 +130,24 @@ func (x I8x16) Mul(y I8x16) (r I8x16) {
 	}
 	return r
 }
+func (x I8x16) Shl(y int32) (r I8x16) {
+	for i := range r {
+		r[i] = x[i] << y
+	}
+	return r
+}
+func (x I8x16) Shr_s(y int32) (r I8x16) {
+	for i := range r {
+		r[i] = x[i] >> y
+	}
+	return r
+}
+func (x I8x16) Shr_u(y int32) (r I8x16) {
+	for i := range r {
+		r[i] = int8(uint8(x[i])) >> y
+	}
+	return r
+}
 func (x I8x16) Min_s(y I8x16) (r I8x16) {
 	for i := range r {
 		r[i] = mini8(x[i], y[i])
@@ -182,6 +200,24 @@ func (x I32x4) Sub(y I32x4) (r I32x4) {
 func (x I32x4) Mul(y I32x4) (r I32x4) {
 	for i := range r {
 		r[i] = x[i] * y[i]
+	}
+	return r
+}
+func (x I32x4) Shl(y int32) (r I32x4) {
+	for i := range r {
+		r[i] = x[i] << y
+	}
+	return r
+}
+func (x I32x4) Shr_s(y int32) (r I32x4) {
+	for i := range r {
+		r[i] = x[i] >> y
+	}
+	return r
+}
+func (x I32x4) Shr_u(y int32) (r I32x4) {
+	for i := range r {
+		r[i] = int32(uint32(x[i])) >> y
 	}
 	return r
 }
@@ -260,9 +296,25 @@ func (x I8x16) Ne(y I8x16) (r I8x16) {
 	}
 	return r
 }
+func (x I8x16) Lt_u(y I8x16) (r I8x16) {
+	for i := range r {
+		if uint32(x[i]) < uint32(y[i]) {
+			r[i] = -1
+		}
+	}
+	return r
+}
 func (x I8x16) Lt_s(y I8x16) (r I8x16) {
 	for i := range r {
 		if x[i] < y[i] {
+			r[i] = -1
+		}
+	}
+	return r
+}
+func (x I8x16) Gt_u(y I8x16) (r I8x16) {
+	for i := range r {
+		if uint32(x[i]) > uint32(y[i]) {
 			r[i] = -1
 		}
 	}
@@ -301,9 +353,25 @@ func (x I32x4) Lt_s(y I32x4) (r I32x4) {
 	}
 	return r
 }
+func (x I32x4) Lt_u(y I32x4) (r I32x4) {
+	for i := range r {
+		if uint32(x[i]) < uint32(y[i]) {
+			r[i] = -1
+		}
+	}
+	return r
+}
 func (x I32x4) Gt_s(y I32x4) (r I32x4) {
 	for i := range r {
 		if x[i] > y[i] {
+			r[i] = -1
+		}
+	}
+	return r
+}
+func (x I32x4) Gt_u(y I32x4) (r I32x4) {
+	for i := range r {
+		if uint32(x[i]) > uint32(y[i]) {
 			r[i] = -1
 		}
 	}

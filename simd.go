@@ -10,8 +10,11 @@ var simdops map[string]string
 
 func init() {
 	simdops = make(map[string]string)
-	for _, op := range []string{"Sqrt", "Neg", "Abs", "Add", "Sub", "Mul", "Div", "Min_s", "Max_s", "Pmin", "Pmax", "Eq", "Ne", "Lt", "Lt_s", "Gt", "Gt_s", "All_true", "Any_true", "And", "Or", "Xor", "Not"} {
+	for _, op := range []string{"Sqrt", "Neg", "Abs", "Add", "Sub", "Mul", "Div", "Shl", "Shr_u", "Shr_s", "Min_s", "Max_s", "Pmin", "Pmax", "Eq", "Ne", "Lt_u", "Lt_s", "Gt_u", "Gt_s", "All_true", "Any_true", "And", "Or", "Xor", "Not"} {
 		for _, t := range []string{"I8x16", "I32x4", "F64x2"} {
+			if t == "F64x2" && strings.HasSuffix(op, "_u") { // F64x2.Lt_u => F64x2.Lt
+				op = strings.TrimSuffix(op, "_u")
+			}
 			s := t + "." + op
 			simdops[s] = strings.ToLower(s)
 			switch op {
