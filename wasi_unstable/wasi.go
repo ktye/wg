@@ -22,6 +22,7 @@ const (
 
 var (
 	Stdout io.Writer = os.Stdout
+	Stderr io.Writer = os.Stderr
 	Stdin  io.Reader = os.Stdin
 )
 
@@ -63,9 +64,9 @@ func Fd_write(fd, p, niovec, written int32) int32 {
 	n := module.I32(4 + p)
 	b := module.Bytes[addr : addr+n]
 	if fd == 1 || fd == 2 {
-		var w io.Writer = os.Stdout
+		w := Stdout
 		if fd == 2 {
-			w = os.Stderr
+			w = Stderr
 		}
 		nw, err := w.Write(b)
 		module.SetI32(written, int32(nw))
@@ -105,7 +106,7 @@ type openfile struct {
 var files map[int32]openfile
 
 func Path_open(fd, dirflags, path, pathlen, oflags int32, baserights, inheritrights int64, fdflags, newfp int32) int32 {
-	fp := int32(2 + len(files))
+	fp := int32(3 + len(files))
 	name := string(module.Bytes[path : path+pathlen])
 	if oflags == 0 { // assume read
 		b, e := ioutil.ReadFile(name)
