@@ -62,8 +62,12 @@ func Fd_write(fd, p, niovec, written int32) int32 {
 	addr := module.I32(p)
 	n := module.I32(4 + p)
 	b := module.Bytes[addr : addr+n]
-	if fd == 1 {
-		nw, err := Stdout.Write(b)
+	if fd == 1 || fd == 2 {
+		var w io.Writer = os.Stdout
+		if fd == 2 {
+			w = os.Stderr
+		}
+		nw, err := w.Write(b)
 		module.SetI32(written, int32(nw))
 		if err == nil {
 			return 0
