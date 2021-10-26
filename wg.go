@@ -14,6 +14,7 @@ import (
 )
 
 var TryCatch bool
+var MultiMemory bool
 var fset *token.FileSet
 var info types.Info
 var pkg *types.Package
@@ -647,6 +648,10 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 	case "Memory": // module.Memory(1)
 		l := a.Args[0].(*ast.BasicLit)
 		m.Memory = l.Value
+		return Nop{}
+	case "Memory2": // module.Memory2(1)
+		l := a.Args[0].(*ast.BasicLit)
+		m.Memory2 = l.Value
 		return Nop{}
 	case "Functions": // module.Functions(0, f1, f2, ...)
 		off, _ := strconv.Atoi(a.Args[0].(*ast.BasicLit).Value)

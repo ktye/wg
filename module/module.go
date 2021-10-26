@@ -12,7 +12,13 @@ func Memory(blocks int) {
 		Bytes = make([]byte, 64*1024*blocks)
 	}
 }
-func Memorysize() int32 { return int32(len(Bytes) >> 16) }
+func Memory2(blocks int) {
+	if Bytes2 == nil {
+		Bytes = make([]byte, 64*1024*blocks)
+	}
+}
+func Memorysize() int32  { return int32(len(Bytes) >> 16) }
+func Memorysize2() int32 { return int32(len(Bytes2) >> 16) }
 func Memorygrow(blocks int32) (previous int32) {
 	previous = int32(len(Bytes) >> 16)
 	delta := 64 * 1024 * int(blocks)
@@ -22,8 +28,15 @@ func Memorygrow(blocks int32) (previous int32) {
 	Bytes = append(Bytes, make([]byte, delta)...)
 	return previous
 }
+func Memorygrow2(blocks int32) int32 {
+	Bytes, Bytes2 = Bytes2, Bytes
+	r := Memorygrow(blocks)
+	Bytes, Bytes2 = Bytes2, Bytes
+	return r
+}
 
 var Bytes []byte
+var Bytes2 []byte
 
 func I8(addr int32) int32    { return int32(int8(Bytes[addr])) }
 func U8(addr int32) uint32   { return uint32(Bytes[addr]) }
@@ -76,6 +89,8 @@ func Memoryfill(dst, val, n int32) {
 		Bytes[dst+i] = b
 	}
 }
+func Memorycopy2(dst, src, n int32) { copy(Bytes2[dst:], Bytes[src:src+n]) }
+func Memorycopy3(dst, src, n int32) { copy(Bytes[dst:], Bytes2[src:src+n]) }
 
 func I32B(b bool) int32 {
 	if b {

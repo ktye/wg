@@ -20,7 +20,10 @@ func (m Module) Wat(w io.Writer) {
 		fmt.Fprintln(w, "(exception_type $panic)") // wavm
 	}
 	if m.Memory != "" {
-		fmt.Fprintf(w, "(memory (export \"memory\") %s)\n", m.Memory)
+		fmt.Fprintf(w, "(memory $a (export \"memory\") %s)\n", m.Memory)
+	}
+	if m.Memory2 != "" && MultiMemory {
+		fmt.Fprintf(w, "(memory $b %s)\n", m.Memory2)
 	}
 	for _, g := range m.Globals {
 		for i, s := range g.Name {
@@ -273,6 +276,21 @@ func (c Call) call(w io.Writer) {
 	// memory / bulk memory
 	case "Memorysize", "Memorygrow", "Memorycopy", "Memoryfill":
 		op = fmt.Sprintf("memory.%s", c.Func[6:])
+	case "Memorycopy2":
+		op = "memory.copy $b $a"
+		if MultiMemory == false {
+			op = "drop\ndrop\ndrop\nunreachable"
+		}
+	case "Memorycopy3":
+		op = "memory.copy $a $b"
+		if MultiMemory == false {
+			op = "drop\ndrop\ndrop\nunreachable"
+		}
+	case "Memorysize2", "Memorygrow2":
+		op = fmt.Sprintf("memory.%s $b", c.Func[6:len(c.Func)-1])
+		if MultiMemory == false {
+			op = "unreachable\ni32.const 0"
+		}
 
 	default:
 		if simd(c.Func, w) {

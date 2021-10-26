@@ -37,6 +37,7 @@ func (t Type) String() string {
 
 type Module struct {
 	Memory    string
+	Memory2   string
 	Imports   map[string]Import
 	Exports   map[string]bool
 	Globals   []Assign

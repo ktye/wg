@@ -12,6 +12,10 @@ func main() {
 		wg.TryCatch = true
 		a = a[1:]
 	}
+	if a[0] == "-multi" {
+		wg.MultiMemory = true
+		a = a[1:]
+	}
 	m := wg.Parse(a[0])
 	m.Wat(os.Stdout)
 }
