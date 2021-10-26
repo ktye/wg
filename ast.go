@@ -68,6 +68,7 @@ type Func struct {
 	Locs     []Local
 	Body     Stmts
 	Doc      string
+	Defer    Expr // Call
 	Exported bool
 }
 type Arg struct {

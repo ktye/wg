@@ -13,6 +13,7 @@ import (
 	"strings"
 )
 
+var TryCatch bool
 var fset *token.FileSet
 var info types.Info
 var pkg *types.Package
@@ -325,6 +326,16 @@ func (m *Module) parseStmt(st ast.Stmt, f *For) Stmt {
 		} else {
 			panic(position(v) + ": labeled statement must be a for loop")
 		}
+	case *ast.DeferStmt: // e.g. defer module.Catch(func)
+		if c, o := m.parseExpr(v.Call).(Call); !o {
+			panic(position(v) + ":defer expects call expression")
+		} else {
+			if c.Func != "Catch" {
+				panic(position(v) + ":defer function must be 'Catch'")
+			}
+			m.current.Defer = Call{Func: string(c.Args[0].(GlobalGets)[0])}
+		}
+		return Nop{}
 	default:
 		panic(position(st) + ": unknown statement: " + reflectType(st))
 	}

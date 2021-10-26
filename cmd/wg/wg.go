@@ -7,6 +7,11 @@ import (
 )
 
 func main() {
-	m := wg.Parse(os.Args[1])
+	a := os.Args[1:]
+	if a[0] == "-try" {
+		wg.TryCatch = true
+		a = a[1:]
+	}
+	m := wg.Parse(a[0])
 	m.Wat(os.Stdout)
 }

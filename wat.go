@@ -15,6 +15,10 @@ func (m Module) Wat(w io.Writer) {
 	for _, i := range m.Imports {
 		i.wat(w)
 	}
+	if TryCatch {
+		// fmt.Fprintln(w, "(tag $panic)") // proposal
+		fmt.Fprintln(w, "(exception_type $panic)") // wavm
+	}
 	if m.Memory != "" {
 		fmt.Fprintf(w, "(memory (export \"memory\") %s)\n", m.Memory)
 	}
@@ -109,8 +113,17 @@ func (f Func) wat(w io.Writer) {
 	fmt.Fprintf(w, "\n")
 	var buf bytes.Buffer
 	fw := fw{Writer: &buf, f: f}
+	try := TryCatch && f.Defer != nil
+	if try {
+		fmt.Fprintf(fw, "try\n")
+	}
 	for _, st := range f.Body {
 		st.wat(fw)
+	}
+	if try {
+		fmt.Fprintf(fw, "catch_all\n")
+		f.Defer.wat(fw)
+		fmt.Fprintf(fw, "end\n")
 	}
 	b := optimize(buf.Bytes())
 	w.Write(b)
@@ -203,7 +216,11 @@ func (l Literal) wat(w io.Writer) {
 }
 func (c Call) wat(w io.Writer) {
 	if c.Func == "panic" {
-		fmt.Fprintln(w, "unreachable")
+		if TryCatch {
+			fmt.Fprintln(w, "throw $panic")
+		} else {
+			fmt.Fprintln(w, "unreachable")
+		}
 		return
 	}
 	for i := range c.Args {
@@ -616,7 +633,7 @@ f:
 func indent(w []string) []string {
 	l := 1
 	for i, s := range w {
-		if s == "else" || s == "end" {
+		if s == "else" || s == "end" || s == "catch_all" {
 			l--
 			if l < 0 {
 				l = 0
@@ -624,7 +641,7 @@ func indent(w []string) []string {
 		}
 		b := strings.Repeat(" ", l)
 		w[i] = b + s
-		if s == "if" || s == "else" || strings.HasPrefix(s, "block") || strings.HasPrefix(s, "loop") {
+		if s == "if" || s == "else" || strings.HasPrefix(s, "block") || strings.HasPrefix(s, "loop") || strings.HasPrefix(s, "try") || strings.HasPrefix(s, "catch_all") {
 			l++
 		}
 	}
