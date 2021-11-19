@@ -9,6 +9,7 @@ import (
 type Type string
 type Emitter interface {
 	wat(io.Writer)
+	c(io.Writer)
 }
 
 const (
