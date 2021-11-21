@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -11,10 +12,10 @@ import (
 )
 
 // convert wg ast to C
-var ctop int
 var gtyp map[string]Type
 var ltyp map[string]Type
 var ftyp map[string][]Type
+var cstk []Type
 
 func (m Module) C(out io.Writer) {
 	gtyp = make(map[string]Type)
@@ -60,7 +61,7 @@ func (m Module) C(out io.Writer) {
 		fmt.Fprintf(w, "_M2=calloc(%s, 64*1024);\n", m.Memory)
 	}
 	for _, d := range m.Data {
-		fmt.Fprintf(w, "memcpy(_M+%d, %q, %d);", d.Off, d.Data, len(d.Data))
+		fmt.Fprintf(w, "memcpy(_M+%d, %q, %d);\n", d.Off, d.Data, len(d.Data))
 	}
 
 	tmax := 0
@@ -130,25 +131,41 @@ func cfunc(w io.Writer, f Func) {
 	for _, l := range f.Locs {
 		ltyp[l.Name] = l.Type
 	}
-	ctop = 0
+	cstk = nil
 	sig := csig(f)
 	if f.Name == "main" {
 		sig = "int main(int *args, char **argv)"
 	}
 	fmt.Fprintf(w, "%s{\n", sig)
-	for _, a := range f.Locs {
-		fmt.Fprintf(w, "%s %s;\n", ctype(a.Type), cname(a.Name))
-	}
+	var buf bytes.Buffer
 	for _, st := range f.Body {
-		st.c(w)
+		st.c(&buf)
 	}
+	m := make(map[Type][]string)
+	for _, a := range f.Locs {
+		t := a.Type
+		m[t] = append(m[t], cname(a.Name))
+	}
+	for i, t := range cstk {
+		m[t] = append(m[t], "_"+strconv.Itoa(i))
+	}
+	k := make([]string, 0)
+	for t := range m {
+		k = append(k, string(t))
+	}
+	sort.Strings(k)
+	for _, s := range k {
+		t := Type(s)
+		fmt.Fprintf(w, "%s %s;\n", ctype(t), strings.Join(m[t], ","))
+	}
+	io.Copy(w, &buf)
 	fmt.Fprintf(w, "}\n")
 }
 
-func c1() string      { return cn(0) }
-func c2() string      { return cn(1) }
-func c1n() string     { ctop++; return c1() }
-func cn(n int) string { return "_" + strconv.Itoa(ctop-n) }
+func c1() string        { return cn(0) }
+func c2() string        { return cn(1) }
+func c1n(t Type) string { cstk = append(cstk, t); return c1() }
+func cn(n int) string   { return "_" + strconv.Itoa(len(cstk)-n-1) }
 func (s Stmts) c(w io.Writer) {
 	for _, st := range s {
 		st.c(w)
@@ -161,11 +178,20 @@ func (a Assign) c(w io.Writer) {
 	for _, e := range a.Expr {
 		e.c(w)
 	}
+	if len(a.Expr) == 0 { // "var t" assigns 0
+		for _, tp := range a.Typs {
+			t := ctype(tp)
+			fmt.Fprintf(w, "%s=(%s)0;\n", c1n(tp), t)
+		}
+	}
 	mod := a.Mod
 	if mod == ":=" || mod == "" {
 		mod = "="
 	}
 	for i, s := range a.Name {
+		if s == "_" {
+			continue
+		}
 		fmt.Fprintf(w, "%s %s%s;\n", cname(s), mod, cn(len(a.Name)-i-1))
 	}
 }
@@ -183,37 +209,42 @@ func (r Return) c(w io.Writer) {
 	}
 	fmt.Fprintf(w, "return;\n")
 }
-func (r Drop) c(w io.Writer) {
-	r.Expr.c(w)
-	fmt.Fprintf(w, "//drop\n")
+func (r Drop) c(w io.Writer) { r.Expr.c(w) }
+func (n Nop) c(w io.Writer)  {}
+func (l GlobalGet) c(w io.Writer) {
+	t := gtyp[string(l)]
+	fmt.Fprintf(w, "%s=%s;\n", c1n(t), l)
 }
-func (n Nop) c(w io.Writer)       {}
-func (l GlobalGet) c(w io.Writer) { fmt.Fprintf(w, "%s %s=%s;\n", ctype(gtyp[string(l)]), c1n(), l) }
 func (l GlobalGets) c(w io.Writer) {
 	for _, li := range l {
-		fmt.Fprintf(w, "%s %s=%s;\n", ctype(gtyp[li]), c1n(), li)
+		t := gtyp[string(li)]
+		fmt.Fprintf(w, "%s=%s;\n", c1n(t), li)
 	}
 }
 func (l LocalGet) c(w io.Writer) {
-	fmt.Fprintf(w, "%s %s=%s;\n", ctype(ltyp[string(l)]), c1n(), cname(string(l)))
+	t := ltyp[string(l)]
+	fmt.Fprintf(w, "%s=%s;\n", c1n(t), cname(string(l)))
 }
 func (l LocalGets) c(w io.Writer) {
 	for _, li := range l {
-		fmt.Fprintf(w, "%s %s=%s;\n", ctype(ltyp[li]), c1n(), cname(string(li)))
+		t := ltyp[string(li)]
+		fmt.Fprintf(w, "%s=%s;\n", c1n(t), cname(string(li)))
 	}
 }
 func (u Unary) c(w io.Writer) {
 	u.X.c(w)
-	fmt.Fprintf(w, "%s %s=%s%s;\n", ctype(u.Op.Type), c1n(), u.Op.Name, c2())
+	t := u.Op.Type
+	fmt.Fprintf(w, "%s=%s%s;\n", c1n(t), u.Op.Name, c2())
 }
 func (b Binary) c(w io.Writer) {
 	b.X.c(w)
 	x := c1()
 	b.Y.c(w)
 	y := c1()
-	fmt.Fprintf(w, "%s %s=%s %s %s;\n", ctype(b.Op.Type), c1n(), x, b.Op.Name, y)
+	t := b.Op.Type
+	fmt.Fprintf(w, "%s=%s %s %s;\n", c1n(t), x, b.Op.Name, y)
 }
-func (l Literal) c(w io.Writer) { fmt.Fprintf(w, "%s %s = %s;\n", ctype(l.Type), c1n(), l.Value) }
+func (l Literal) c(w io.Writer) { fmt.Fprintf(w, "%s = %s;\n", c1n(l.Type), l.Value) }
 func ccall(w io.Writer, args []Expr, rt []Type) []string {
 	a := make([]string, len(args))
 	for i := range args {
@@ -222,22 +253,79 @@ func ccall(w io.Writer, args []Expr, rt []Type) []string {
 	}
 	if len(rt) > 1 {
 		for _, t := range rt {
-			fmt.Fprintf(w, "%s %s;\n", ctype(t), c1n())
-			a = append(a, "&"+c1())
+			a = append(a, "&"+c1n(t))
 		}
 	}
 	if len(rt) == 1 {
-		fmt.Fprintf(w, "%s %s=", ctype(rt[0]), c1n())
+		fmt.Fprintf(w, "%s=", c1n(rt[0]))
 	}
 	return a
 }
 func (c Call) c(w io.Writer) {
-	if c.Func == "panic" {
+	switch c.Func {
+	case "I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64", "F32", "F64", "SetI8", "SetU8", "SetI16", "SetU16", "SetI32", "SetU32", "SetI64", "SetU64", "SetF32", "SetF64":
+		c.Args[0].c(w)
+		t := ""
+		s := c.Func[len(c.Func)-2:]
+		if s[1] == '8' {
+			s = "8"
+		}
+		f, set := c.Func, false
+		if strings.HasPrefix(f, "Set") {
+			f, set = f[3:], true
+		}
+		if strings.HasPrefix(f, "I") {
+			t = "int" + s + "_t"
+		} else if strings.HasPrefix(f, "U") {
+			t = "uint" + s + "_t"
+		} else if c.Func == "F32" {
+			t = "float"
+		} else {
+			t = "double"
+		}
+		if set {
+			c.Args[1].c(w)
+			fmt.Fprintf(w, "*((%s*)(_M+%s))=%s;\n", t, c2(), c1())
+		} else {
+			fmt.Fprintf(w, "%s=*((%s*)(_M+%s));\n", c1n(Type(t)), t, c2())
+		}
+	case "I32B": //bool2i32 (nop)
+	case "panic":
 		fmt.Fprintln(w, "PANIC?")
-		return
+	default:
+		args := ccall(w, c.Args, ftyp[c.Func])
+		fmt.Fprintf(w, "%s(%s);\n", c.Func, strings.Join(args, ", "))
 	}
-	args := ccall(w, c.Args, ftyp[c.Func])
-	fmt.Fprintf(w, "%s(%s);\n", c.Func, strings.Join(args, ", "))
+	/*
+		// store
+		case "SetI8", "SetI16":
+			op = fmt.Sprintf("i32.store%s", c.Func[4:])
+		case "SetI32", "SetI64", "SetF32", "SetF64":
+			op = fmt.Sprintf("%c%s.store", c.Func[3]+32, c.Func[4:])
+
+		// wasm ops
+		case "I32clz", "I64clz", "I32ctz", "I64ctz", "I32popcnt", "I64popcnt", "F64abs", "F64sqrt", "F64ceil", "F64floor", "F64nearest", "F64min", "F64max", "F64copysign", "I64reinterpret_f64", "F64reinterpret_i64", "I32reinterpret_f32", "F32reinterpret_i32":
+			op = fmt.Sprintf("%s.%s", strings.ToLower(c.Func[:3]), c.Func[3:])
+
+		// memory / bulk memory
+		case "Memorysize", "Memorygrow", "Memorycopy", "Memoryfill":
+			op = fmt.Sprintf("memory.%s", c.Func[6:])
+		case "Memorycopy2":
+			op = "memory.copy $b $a"
+			if MultiMemory == false {
+				op = "drop\ndrop\ndrop\nunreachable"
+			}
+		case "Memorycopy3":
+			op = "memory.copy $a $b"
+			if MultiMemory == false {
+				op = "drop\ndrop\ndrop\nunreachable"
+			}
+		case "Memorysize2", "Memorygrow2":
+			op = fmt.Sprintf("memory.%s $b", c.Func[6:len(c.Func)-1])
+			if MultiMemory == false {
+				op = "unreachable\ni32.const 0"
+			}
+	*/
 }
 func (c CallIndirect) c(w io.Writer) {
 	c.Func.c(w)
@@ -246,9 +334,11 @@ func (c CallIndirect) c(w io.Writer) {
 	for i := range c.Args {
 		c.Args[i].c(w)
 	}
-	r := ""
+	r := "void"
+	as := ""
 	if len(c.ResType) == 1 {
 		r = ctype(c.ResType[0])
+		as = c1n(c.ResType[0]) + "="
 	}
 	a := make([]string, len(c.ArgType))
 	for i, t := range c.ArgType {
@@ -257,12 +347,12 @@ func (c CallIndirect) c(w io.Writer) {
 	at := strings.Join(a, ",")
 	// ((I(*)(I))MT[x0])
 	// ((I(*)(I,I))MT[x0])
-	fmt.Fprintf(w, "((%s(*)(%s))_F[%s])(%s);\n", r, at, n, strings.Join(args, ", "))
+	fmt.Fprintf(w, "%s((%s(*)(%s))_F[%s])(%s);\n", as, r, at, n, strings.Join(args, ", "))
 }
 func (c Cast) c(w io.Writer) {
 	c.Arg.c(w)
-	d := ctype(c.Dst)
-	fmt.Fprintf(w, "%s %s=(%s)%s;\n", d, c1n(), d, c2())
+	t := c.Dst
+	fmt.Fprintf(w, "%s=(%s)%s;\n", c1n(t), ctype(t), c2())
 }
 func (i If) c(w io.Writer) {
 	i.If.c(w)
