@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -15,11 +14,13 @@ import (
 var gtyp map[string]Type
 var ltyp map[string]Type
 var ftyp map[string][]Type
+var farg map[string]int
 var cstk []Type
 
 func (m Module) C(out io.Writer) {
 	gtyp = make(map[string]Type)
 	ftyp = make(map[string][]Type)
+	farg = make(map[string]int)
 	var buf bytes.Buffer
 	w := &buf
 	w.Write([]byte(chead))
@@ -31,6 +32,7 @@ func (m Module) C(out io.Writer) {
 			rt[i] = f.Rets[i]
 		}
 		ftyp[f.Name] = rt
+		farg[f.Name] = len(f.Args)
 	}
 
 	for _, g := range m.Globals {
@@ -141,22 +143,30 @@ func cfunc(w io.Writer, f Func) {
 	for _, st := range f.Body {
 		st.c(&buf)
 	}
-	m := make(map[Type][]string)
+	m := make(map[string][]string)
 	for _, a := range f.Locs {
-		t := a.Type
+		t := ctype(a.Type)
 		m[t] = append(m[t], cname(a.Name))
 	}
 	for i, t := range cstk {
-		m[t] = append(m[t], "_"+strconv.Itoa(i))
+		m[ctype(t)] = append(m[ctype(t)], "_"+strconv.Itoa(i))
 	}
-	k := make([]string, 0)
-	for t := range m {
-		k = append(k, string(t))
+
+	k := []string{"int8_t", "uint8_t", "int16_t", "uint16_t", "int32_t", "uint32_t", "int64_t", "uint64_t", "double", "i8x16", "i32x4", "f64x2"}
+	nk := 0
+	for _, t := range k {
+		v := m[t]
+		if len(v) > 0 {
+			fmt.Fprintf(w, "%s %s;\n", t, strings.Join(v, ","))
+			nk++
+		}
 	}
-	sort.Strings(k)
-	for _, s := range k {
-		t := Type(s)
-		fmt.Fprintf(w, "%s %s;\n", ctype(t), strings.Join(m[t], ","))
+	if nk != len(m) {
+		var t []string
+		for k := range m {
+			t = append(t, k)
+		}
+		panic("there are unknown local types: " + strings.Join(t, "|"))
 	}
 	io.Copy(w, &buf)
 	fmt.Fprintf(w, "}\n")
@@ -237,6 +247,9 @@ func (u Unary) c(w io.Writer) {
 	fmt.Fprintf(w, "%s=%s%s;\n", c1n(t), u.Op.Name, c2())
 }
 func (b Binary) c(w io.Writer) {
+	if b.Op.Name == "&^" {
+		b.Op.Name = "&~"
+	}
 	b.X.c(w)
 	x := c1()
 	b.Y.c(w)
@@ -244,27 +257,44 @@ func (b Binary) c(w io.Writer) {
 	t := b.Op.Type
 	fmt.Fprintf(w, "%s=%s %s %s;\n", c1n(t), x, b.Op.Name, y)
 }
-func (l Literal) c(w io.Writer) { fmt.Fprintf(w, "%s = %s;\n", c1n(l.Type), l.Value) }
-func ccall(w io.Writer, args []Expr, rt []Type) []string {
-	a := make([]string, len(args))
-	for i := range args {
-		args[i].c(w)
-		a[i] = c1()
+func (l Literal) c(w io.Writer) {
+	fmt.Fprintf(w, "%s = %s;\n", c1n(l.Type), l.Value)
+}
+func ccall(w io.Writer, f string, args []Expr, rt []Type) []string {
+	var a []string
+	if n, ok := farg[f]; ok && len(args) == 1 && n > 1 && len(rt) == 1 { // chain f(g(..)), f:multi-arg, g:multi-ret
+		args[0].c(w)
+		for i := 0; i < n; i++ {
+			a = append(a, cn(i))
+		}
+	} else {
+		for i := range args {
+			args[i].c(w)
+			a = append(a, c1())
+		}
 	}
 	if len(rt) > 1 {
 		for _, t := range rt {
 			a = append(a, "&"+c1n(t))
 		}
 	}
-	if len(rt) == 1 {
-		fmt.Fprintf(w, "%s=", c1n(rt[0]))
-	}
 	return a
 }
 func (c Call) c(w io.Writer) {
+	//fmt.Fprintf(w, "//call %s\n", c.Func)
+	//defer func() { fmt.Fprintf(w, " // <%s\n", c.Func) }()
+	call := func(f string) {
+		rt := ftyp[c.Func]
+		args := ccall(w, c.Func, c.Args, rt)
+		if len(rt) == 1 {
+			fmt.Fprintf(w, "%s=", c1n(rt[0]))
+		}
+		fmt.Fprintf(w, "%s(%s);\n", f, strings.Join(args, ", "))
+	}
 	switch c.Func {
 	case "I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64", "F32", "F64", "SetI8", "SetU8", "SetI16", "SetU16", "SetI32", "SetU32", "SetI64", "SetU64", "SetF32", "SetF64":
 		c.Args[0].c(w)
+		a := c1()
 		t := ""
 		s := c.Func[len(c.Func)-2:]
 		if s[1] == '8' {
@@ -285,52 +315,84 @@ func (c Call) c(w io.Writer) {
 		}
 		if set {
 			c.Args[1].c(w)
-			fmt.Fprintf(w, "*((%s*)(_M+%s))=%s;\n", t, c2(), c1())
+			fmt.Fprintf(w, "*((%s*)(_M+%s))=%s;\n", t, a, c1())
 		} else {
-			fmt.Fprintf(w, "%s=*((%s*)(_M+%s));\n", c1n(Type(t)), t, c2())
+			fmt.Fprintf(w, "%s=*((%s*)(_M+%s));\n", c1n(Type(t)), t, a)
 		}
 	case "I32B": //bool2i32 (nop)
+		ccall(w, c.Func, c.Args, ftyp[c.Func])
+	case "I8x16load", "I32x4load", "F64x2load": // others?
+		c.Args[0].c(w)
+		t := Type(c.Func[:5])
+		fmt.Fprintf(w, "memcpy(&%s, _M+%s, 16);\n", c1n(t), c2())
+	case "I8x16store", "I32x4store", "F64x2store":
+		c.Args[0].c(w)
+		x := c1()
+		c.Args[1].c(w)
+		y := c1()
+		fmt.Fprintf(w, "memcpy(_M+%s, &%s, 16);\n", x, y)
+	case "I8x16splat", "I32x4splat":
+		a, b, t := "", "i32x4", I32x4
+		if c.Func == "I8x16splat" {
+			a, b, t = "(int8_t)", "i8x16", I8x16
+		}
+		c.Args[0].c(w)
+		x := c1()
+		fmt.Fprintf(w, "%s=%s%s-(%s){}; //broadcast\n", c1n(Type(t)), a, x, b)
+	case "I8x16.Eq", "I32x4.Eq", "I8x16.And", "I32x4.And":
+		i := strings.Index(c.Func, ".")
+		suffix := c.Func[i+1:]
+		t := Type(c.Func[:5])
+		a := ccall(w, "", c.Args, []Type{t})
+		m := map[string]string{
+			"Eq":  "==",
+			"And": "&",
+		}
+		op, ok := m[suffix] //"=="
+		if ok == false {
+			panic("simd op does not exist: " + suffix)
+		}
+		fmt.Fprintf(w, "%s=%s %s %s;\n", c1n(t), a[0], op, a[1])
+	case "I8x16.Not", "I32x4.Not":
+		t := Type(c.Func[:5])
+		a := ccall(w, "", c.Args, []Type{t})
+		op := "~"
+		fmt.Fprintf(w, "%s=%s%s;\n", c1n(t), op, a[0])
+	case "I8x16.All_true", "I32x4.All_true", "I8x16.Any_true", "I32x4.Any_true":
+		n := 4
+		if strings.HasPrefix(c.Func, "I8x16") {
+			n = 16
+		}
+		ccall(w, "", c.Args, []Type{I32})
+		v := c1()
+		s := ""
+		for i := 0; i < n; i++ {
+			op := ""
+			if i > 0 {
+				op = " && "
+				if strings.HasSuffix(c.Func, "Any_true") {
+					op = " || "
+				}
+			}
+			s += op + v + "[" + strconv.Itoa(i) + "]"
+		}
+		fmt.Fprintf(w, "%s=(int32_t)(%s);\n", c1n("int32_t"), s)
 	case "panic":
-		fmt.Fprintln(w, "PANIC?")
+		ccall(w, "", c.Args, []Type{I32})
+		fmt.Fprintln(w, "exit(1); // todo: trap\n")
+	case "Memorysize":
+		fmt.Fprintf(w, "%s=_memorysize;\n", c1n("int32_t"))
+	case "Memorysize2":
+		fmt.Fprintf(w, "%s=_memorysize2;\n", c1n("int32_t"))
 	default:
-		args := ccall(w, c.Args, ftyp[c.Func])
-		fmt.Fprintf(w, "%s(%s);\n", c.Func, strings.Join(args, ", "))
+		// nyi: "I64clz", "I32ctz", "I64ctz", "I32popcnt", "I64popcnt", "F64abs", "F64sqrt", "F64ceil", "F64floor", "F64nearest", "F64min", "F64max", "F64copysign", "I64reinterpret_f64", "F64reinterpret_i64", "I32reinterpret_f32", "F32reinterpret_i32"
+		call(c.Func)
 	}
-	/*
-		// store
-		case "SetI8", "SetI16":
-			op = fmt.Sprintf("i32.store%s", c.Func[4:])
-		case "SetI32", "SetI64", "SetF32", "SetF64":
-			op = fmt.Sprintf("%c%s.store", c.Func[3]+32, c.Func[4:])
-
-		// wasm ops
-		case "I32clz", "I64clz", "I32ctz", "I64ctz", "I32popcnt", "I64popcnt", "F64abs", "F64sqrt", "F64ceil", "F64floor", "F64nearest", "F64min", "F64max", "F64copysign", "I64reinterpret_f64", "F64reinterpret_i64", "I32reinterpret_f32", "F32reinterpret_i32":
-			op = fmt.Sprintf("%s.%s", strings.ToLower(c.Func[:3]), c.Func[3:])
-
-		// memory / bulk memory
-		case "Memorysize", "Memorygrow", "Memorycopy", "Memoryfill":
-			op = fmt.Sprintf("memory.%s", c.Func[6:])
-		case "Memorycopy2":
-			op = "memory.copy $b $a"
-			if MultiMemory == false {
-				op = "drop\ndrop\ndrop\nunreachable"
-			}
-		case "Memorycopy3":
-			op = "memory.copy $a $b"
-			if MultiMemory == false {
-				op = "drop\ndrop\ndrop\nunreachable"
-			}
-		case "Memorysize2", "Memorygrow2":
-			op = fmt.Sprintf("memory.%s $b", c.Func[6:len(c.Func)-1])
-			if MultiMemory == false {
-				op = "unreachable\ni32.const 0"
-			}
-	*/
 }
 func (c CallIndirect) c(w io.Writer) {
 	c.Func.c(w)
 	n := c1()
-	args := ccall(w, c.Args, c.ResType)
+	args := ccall(w, "", c.Args, c.ResType)
 	for i := range c.Args {
 		c.Args[i].c(w)
 	}
@@ -372,14 +434,13 @@ func (s Switch) c(w io.Writer) {
 		c.c(w)
 		fmt.Fprintf(w, "break;\n")
 	}
-	fmt.Fprintf(w, "default:\n")
-	s.Def.c(w)
+	if len(s.Def) > 0 {
+		fmt.Fprintf(w, "default:\n")
+		s.Def.c(w)
+	}
 	fmt.Fprintf(w, "}\n")
 }
 func (f For) c(w io.Writer) {
-	if f.Label != "" {
-		fmt.Fprintf(w, "%s:\n", f.Label)
-	}
 	if f.Simple {
 		fmt.Fprintf(w, "do{\n")
 		f.Body.c(w)
@@ -394,8 +455,8 @@ func (f For) c(w io.Writer) {
 		fmt.Fprintf(w, "while(1){\n")
 		if f.Cond != nil {
 			f.Cond.c(w)
+			fmt.Fprintf(w, "if(%s)break;\n", c1())
 		}
-		fmt.Fprintf(w, "if(%s)break;\n", c1())
 		f.Body.c(w)
 		if f.Post != nil {
 			f.Post.c(w)
@@ -403,7 +464,7 @@ func (f For) c(w io.Writer) {
 		fmt.Fprintf(w, "}\n")
 	}
 	if f.Label != "" {
-		fmt.Fprintf(w, "%s_post:\n", f.Label)
+		fmt.Fprintf(w, "%s:\n", f.Label)
 	}
 }
 func (b Branch) c(w io.Writer) {
@@ -414,19 +475,38 @@ func (b Branch) c(w io.Writer) {
 			fmt.Fprintf(w, "continue;\n")
 		}
 	} else {
-		if b.Break {
-			fmt.Fprintf(w, "goto %s_post;\n", b.Label)
-		} else {
-			fmt.Fprintf(w, "goto %s;\n", b.Label)
+		if b.Break == false {
+			panic("break (jump-backwards)")
 		}
+		fmt.Fprintf(w, "goto %s;\n", b.Label)
 	}
 }
 
 const chead string = `#include<stdio.h>
+#include<stdlib.h>
 #include<stdint.h>
+#include<string.h>
 typedef int8_t  i8x16 __attribute__ ((vector_size (16)));
 typedef int32_t i32x4 __attribute__ ((vector_size (16)));
 typedef double  f64x2 __attribute__ ((vector_size (16)));
 char *_M, *_M2;
-void *_F;
+void **_F;
+int32_t _memorysize, _memorysize2;
+int32_t Memorygrow(int32_t delta){
+ int32_t r=_memorysize;
+ _memorysize+=delta;
+ _M=(char *)realloc(_M, 64*1024*_memorysize);
+ return r;
+}
+int32_t Memorygrow2(int32_t delta){
+ int32_t r=_memorysize2;
+ _memorysize2+=delta;
+ _M2=(char *)realloc(_M2, 64*1024*_memorysize2);
+ return r;
+}
+void Memorycopy (int32_t dst, int32_t src, int32_t n){ memcpy(_M +dst, _M +src, n); }
+void Memorycopy2(int32_t dst, int32_t src, int32_t n){ memcpy(_M2+dst, _M2+src, n); }
+void Memorycopy3(int32_t dst, int32_t src, int32_t n){ memcpy( _M+dst, _M2+src, n); }
+void Memoryfill(int32_t p, int32_t v, int32_t n){ memset(_M+p, (int)v, (size_t)n); }
+int32_t I32clz(uint32_t x) { return (int32_t)__builtin_clz((unsigned int)x); }
 `
