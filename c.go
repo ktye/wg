@@ -2,7 +2,6 @@ package wg
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"strconv"
@@ -59,7 +58,7 @@ func (m Module) C(out io.Writer) {
 		f.Exported = m.Exports[f.Name] || m.exportAll
 		cfunc(w, f)
 	}
-	fmt.Fprintf(w, "void cinit(){\n")
+	fmt.Fprintf(w, "void cinit(){\n_memorysize=1;\n_memorysize2=1;\n")
 	if m.Memory != "" {
 		fmt.Fprintf(w, "_M=calloc(%s, 64*1024);\n", m.Memory)
 	}
@@ -87,7 +86,30 @@ func (m Module) C(out io.Writer) {
 	w.Write([]byte(ctail))
 	out.Write(dumbindent.FormatBytes(nil, buf.Bytes(), &dumbindent.Options{Spaces: 1}))
 }
-func cquote(s string) string { return `\x` + hex.EncodeToString([]byte(s)) }
+func cquote(s string) string {
+	var w strings.Builder
+	for _, c := range s {
+		switch c {
+		case '\t':
+			w.Write([]byte(`\t`))
+		case '\n':
+			w.Write([]byte(`\n`))
+		case '\\':
+			w.Write([]byte(`\\`))
+		case '\'':
+			w.Write([]byte(`\'`))
+		case '"':
+			w.Write([]byte(`\"`))
+		default:
+			if c < 32 || c > 127 {
+				fmt.Fprintf(&w, "\\%o", c)
+			} else {
+				w.Write([]byte{byte(c)})
+			}
+		}
+	}
+	return w.String()
+}
 func ctype(t Type) string {
 	m := map[Type]string{
 		V:     "void",
