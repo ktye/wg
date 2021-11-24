@@ -503,6 +503,7 @@ func (b Branch) wat(w io.Writer) {
 		fmt.Fprintf(w, "br %s\n", l)
 	}
 }
+func (p Printf) wat(w io.Writer) {} // ignored in wasm
 
 var wasmcst map[string]string
 var wasmops map[string]string

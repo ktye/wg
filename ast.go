@@ -151,3 +151,7 @@ type Branch struct {
 	Break bool // break|continue
 	Label string
 }
+type Printf struct {
+	Format string
+	Args   []string
+}

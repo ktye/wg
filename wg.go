@@ -683,6 +683,8 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 			m.Data = append(m.Data, Data{off, data})
 		}
 		return Nop{}
+	case "Printf":
+		return parsePrintf(a.Args)
 	}
 	if s, o := a.Fun.(*ast.SelectorExpr); o { //method receiver
 		if id, o := s.X.(*ast.Ident); o {
@@ -723,6 +725,13 @@ func (m *Module) parseCallIndirect(a *ast.TypeAssertExpr, args []ast.Expr) (r Ca
 		r.Args[i] = m.parseExpr(args[i])
 	}
 	return r
+}
+func parsePrintf(a []ast.Expr) (p Printf) {
+	p.Format = a[0].(*ast.BasicLit).Value
+	for _, v := range a[1:] {
+		p.Args = append(p.Args, v.(*ast.Ident).Name)
+	}
+	return p
 }
 func parseIdent(a ast.Node) string { // x or x.a or x.a.b
 	switch v := a.(type) {

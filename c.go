@@ -37,6 +37,16 @@ func (m Module) C(out io.Writer) {
 		ftyp[f.Name] = rt
 		farg[f.Name] = len(f.Args)
 	}
+	// register return type for some built-in functions
+	for _, s := range []string{"Memorycopy", "Memorycopy2", "Memorycopy3", "Memoryfill"} {
+		ftyp[s] = []Type{}
+	}
+	for _, s := range []string{"Memorygrow", "I32clz", "I64popcnt"} {
+		ftyp[s] = []Type{I32}
+	}
+	for _, s := range []string{"F64abs", "F64sqrt", "F64copysign", "F64min", "F64max", "F64floor"} {
+		ftyp[s] = []Type{F64}
+	}
 
 	for _, g := range m.Globals {
 		for i, s := range g.Name {
@@ -318,7 +328,13 @@ func (c Call) c(w io.Writer) {
 	// fmt.Fprintf(w, "//call %s\n", c.Func)
 	// defer func() { fmt.Fprintf(w, " // <%s\n", c.Func) }()
 	call := func(f string) {
-		rt := ftyp[c.Func]
+		//if f == "I32clz" {
+		//	fmt.Fprintf(w, "// rt: %d\n", len(rt))
+		//}
+		rt, ok := ftyp[c.Func]
+		if !ok {
+			panic(string(c.Func) + " is not defined")
+		}
 		args := ccall(w, c.Func, c.Args, rt)
 		if len(rt) == 1 {
 			fmt.Fprintf(w, "%s=", c1n(rt[0]))
@@ -591,6 +607,13 @@ func (b Branch) c(w io.Writer) {
 		}
 		fmt.Fprintf(w, "goto %s;\n", b.Label)
 	}
+}
+func (p Printf) c(w io.Writer) {
+	fmt.Fprintf(w, "printf(%s", p.Format)
+	for _, a := range p.Args {
+		fmt.Fprintf(w, ",%s", a)
+	}
+	fmt.Fprintf(w, ");fflush(stdout);\n")
 }
 
 const chead string = `#include<stdio.h>

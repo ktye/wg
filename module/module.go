@@ -2,6 +2,7 @@ package module
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/bits"
 )
@@ -128,3 +129,6 @@ func F32reinterpret_i32(x uint32) float32 { return math.Float32frombits(x) }
 func F64reinterpret_i64(x uint64) float64 { return math.Float64frombits(x) }
 func I32reinterpret_f32(x float32) uint32 { return math.Float32bits(x) }
 func I64reinterpret_f64(x float64) uint64 { return math.Float64bits(x) }
+
+// for debugging only (ignored by wasm)
+func Printf(f string, a ...interface{}) { fmt.Printf(f, a...) }
