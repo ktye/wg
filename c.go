@@ -41,7 +41,7 @@ func (m Module) C(out io.Writer) {
 	for _, s := range []string{"Memorycopy", "Memorycopy2", "Memorycopy3", "Memoryfill"} {
 		ftyp[s] = []Type{}
 	}
-	for _, s := range []string{"Memorygrow", "I32clz", "I64popcnt"} {
+	for _, s := range []string{"Memorygrow", "Memorygrow2", "I32clz", "I64popcnt"} {
 		ftyp[s] = []Type{I32}
 	}
 	for _, s := range []string{"F64abs", "F64sqrt", "F64copysign", "F64min", "F64max", "F64floor"} {
