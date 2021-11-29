@@ -61,7 +61,7 @@ func (m Module) C(out io.Writer) {
 			default:
 				panic("global value must be (cast-to) literal")
 			}
-			fmt.Fprintf(w, "%s %s = %s;\n", ctype(t), s, u)
+			fmt.Fprintf(w, "%s %s=%s;\n", ctype(t), s, u)
 		}
 	}
 	for _, f := range m.Funcs {
@@ -225,13 +225,25 @@ func (m Import) c(w io.Writer) {
 func (a Assign) c(w io.Writer) {
 	// fmt.Fprintf(w, "// assign %s\n", a.Mod)
 	// defer func() { fmt.Fprintf(w, "//<assign\n") }()
+	var c []string
 	for _, e := range a.Expr {
 		e.c(w)
+		n := 1
+		if ec, ok := e.(Call); ok {
+			if rt, ok := ftyp[ec.Func]; ok {
+				n = len(rt)
+			}
+		}
+		//for i := n; i >= 0; i-- {
+		for i := 0; i < n; i++ {
+			c = append(c, cn(n-i-1))
+		}
 	}
 	if len(a.Expr) == 0 { // "var t" assigns 0
 		for _, tp := range a.Typs {
 			t := ctype(tp)
 			fmt.Fprintf(w, "%s=(%s)0;\n", c1n(tp), t)
+			c = append(c, c1())
 		}
 	}
 	mod := a.Mod
@@ -243,10 +255,13 @@ func (a Assign) c(w io.Writer) {
 		return
 	}
 	for i, s := range a.Name {
+		if len(a.Name) != len(c) {
+			panic(fmt.Sprintf("multi-assign %d values to %d vars", len(c), len(a.Name)))
+		}
 		if s == "_" {
 			continue
 		}
-		fmt.Fprintf(w, "%s %s%s;\n", cname(s), mod, cn(len(a.Name)-i-1))
+		fmt.Fprintf(w, "%s %s%s;\n", cname(s), mod, c[i])
 	}
 }
 func (r Return) c(w io.Writer) {
@@ -299,10 +314,10 @@ func (b Binary) c(w io.Writer) {
 	b.Y.c(w)
 	y := c1()
 	t := b.Op.Type
-	fmt.Fprintf(w, "%s=%s %s %s;\n", c1n(t), x, b.Op.Name, y)
+	fmt.Fprintf(w, "%s=%s%s%s;\n", c1n(t), x, b.Op.Name, y)
 }
 func (l Literal) c(w io.Writer) {
-	fmt.Fprintf(w, "%s = %s;\n", c1n(l.Type), l.Value)
+	fmt.Fprintf(w, "%s=%s;\n", c1n(l.Type), l.Value)
 }
 func ccall(w io.Writer, f string, args []Expr, rt []Type) []string {
 	var a []string
@@ -485,7 +500,7 @@ func (c Call) c(w io.Writer) {
 		fmt.Fprintf(w, "%s=*(uint64_t*)&%s;\n", c1n("uint64_t"), c1())
 	case "panic":
 		ccall(w, "", c.Args, []Type{I32})
-		fmt.Fprintln(w, "exit(1); // todo: trap\n")
+		fmt.Fprintln(w, "exit(1); // todo: trap")
 	case "Memorysize":
 		fmt.Fprintf(w, "%s=_memorysize;\n", c1n("int32_t"))
 	case "Memorysize2":
@@ -582,7 +597,7 @@ func (f For) c(w io.Writer) {
 		fmt.Fprintf(w, "while(1){\n")
 		if f.Cond != nil {
 			f.Cond.c(w)
-			fmt.Fprintf(w, "if(%s)break;\n", c1())
+			fmt.Fprintf(w, "if(!%s)break;\n", c1())
 		}
 		f.Body.c(w)
 		if f.Post != nil {
