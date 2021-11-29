@@ -3,27 +3,45 @@ package wg
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
+
+	"github.com/ktye/wg/dumbindent"
 )
 
 func TestWg(t *testing.T) {
 
-	//printast = true
-	m := Parse("x_test.go")
-	if e := testGlobal(t, m.Globals); e != nil {
-		t.Fatal(e)
+	{
+		//printast = true
+		m := Parse("x_test.go")
+		if e := testGlobal(t, m.Globals); e != nil {
+			t.Fatal(e)
+		}
+		for _, f := range m.Funcs {
+			var buf bytes.Buffer
+			f.Exported = m.Exports[f.Name]
+			f.wat(&buf)
+			got := trim(string(buf.Bytes()))
+			exp := trim(f.Doc)
+			if got != exp {
+				t.Fatalf("func %s\ngot: %q\nexp: %q\n", f.Name, got, exp)
+			}
+		}
 	}
 
-	for _, f := range m.Funcs {
-		var buf bytes.Buffer
-		//w := newIndent(&buf)
-		f.Exported = m.Exports[f.Name]
-		f.wat(&buf)
-		got := trim(string(buf.Bytes()))
-		exp := trim(f.Doc)
-		if got != exp {
-			t.Fatalf("func %s\ngot: %q\nexp: %q\n", f.Name, got, exp)
+	{
+		m := Parse("c_test.go")
+		m.C(io.Discard) //fill maps
+		for _, f := range m.Funcs {
+			var buf bytes.Buffer
+			cfunc(&buf, f)
+			got := string(dumbindent.FormatBytes(nil, buf.Bytes(), &dumbindent.Options{Spaces: 1}))
+			exp := f.Doc
+			if got != exp {
+				fmt.Println(got)
+				t.Fatalf("func %s\ngot: %q\nexp: %q\n", f.Name, got, exp)
+			}
 		}
 	}
 }
