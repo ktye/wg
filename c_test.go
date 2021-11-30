@@ -26,6 +26,33 @@ func b() bool {
 	return x
 }
 
+// int32_t add(int32_t x, int32_t y){
+//  int32_t _0,_1,_2;
+//  _0=x;
+//  _1=y;
+//  _2=_0+_1;
+//  return _2;
+// }
+func add(x, y int32) int32 { return x + y }
+
+// void r2(int32_t* _R0, int32_t* _R1){
+//  int32_t _0,_1;
+//  _0=1;
+//  *_R0=_0;
+//  _1=2;
+//  *_R1=_1;
+//  return;
+// }
+func r2() (int32, int32) { return 1, 2 }
+
+// int32_t c2(){
+//  int32_t _0,_1,_2;
+//  r2(&_0, &_1);
+//  _2=add(_0, _1);
+//  return _2;
+// }
+func c2() int32 { return add(r2()) }
+
 // int64_t zero(){
 //  int64_t r,_0,_1,_2;
 //  r=(int64_t)0;

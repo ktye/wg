@@ -332,7 +332,7 @@ func ccall(w io.Writer, f string, args []Expr, rt []Type) []string {
 	var a []string
 	if n, ok := farg[f]; ok && len(args) == 1 && n > 1 { // chain f(g(..)), f:multi-arg, g:multi-ret
 		args[0].c(w)
-		for i := 0; i < n; i++ {
+		for i := n - 1; i >= 0; i-- {
 			a = append(a, cn(i))
 		}
 	} else {
