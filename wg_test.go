@@ -75,3 +75,12 @@ func trim(s string) string {
 	s = strings.Replace(s, " )", ")", -1)
 	return s
 }
+
+func TestCquote(t *testing.T) {
+	s := "\x01\t\x10`\x01\xc4"
+	x := `\001\t\020` + "`" + `\001\304`
+	g := cquote(s)
+	if g != x {
+		t.Fatalf("expected %q got %q\n", x, g)
+	}
+}

@@ -98,7 +98,8 @@ func (m Module) C(out io.Writer) {
 }
 func cquote(s string) string {
 	var w strings.Builder
-	for _, c := range s {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
 		switch c {
 		case '\t':
 			w.Write([]byte(`\t`))
@@ -112,7 +113,7 @@ func cquote(s string) string {
 			w.Write([]byte(`\"`))
 		default:
 			if c < 32 || c > 127 {
-				fmt.Fprintf(&w, "\\%o", c)
+				fmt.Fprintf(&w, "\\%03o", c)
 			} else {
 				w.Write([]byte{byte(c)})
 			}
