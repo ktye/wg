@@ -178,6 +178,11 @@ func cfunc(w io.Writer, f Func) {
 	sig := csig(f)
 	fmt.Fprintf(w, "%s{\n", sig)
 	var buf bytes.Buffer
+	for _, l := range f.Locs {
+		if strings.Index(string(l.Type), "x") < 0 { //no vector types
+			fmt.Fprintf(&buf, "%s=(%s)0;\n", cname(l.Name), ctype(l.Type))
+		}
+	}
 	for _, st := range f.Body {
 		st.c(&buf)
 	}
@@ -240,11 +245,14 @@ func (a Assign) c(w io.Writer) {
 		}
 	}
 	if len(a.Expr) == 0 { // "var t" assigns 0
-		for _, tp := range a.Typs {
-			t := ctype(tp)
-			fmt.Fprintf(w, "%s=(%s)0;\n", c1n(tp), t)
-			c = append(c, c1())
-		}
+		return
+		/*
+			for _, tp := range a.Typs {
+				t := ctype(tp)
+				fmt.Fprintf(w, "%s=(%s)0;\n", c1n(tp), t)
+				c = append(c, c1())
+			}
+		*/
 	}
 	mod := a.Mod
 	if mod == ":=" || mod == "" {

@@ -16,19 +16,33 @@ func f() int32 { return 0 }
 func t(x int32) int32 { return 1 }
 
 // uint32_t b(){
-//  uint32_t x,_0,_1;
-//  _0=(uint32_t)0;
-//  x =_0;
-//  _1=x;
-//  return _1;
+//  uint32_t x,_0;
+//  x=(uint32_t)0;
+//  _0=x;
+//  return _0;
 // }
 func b() bool {
 	var x bool
 	return x
 }
 
+// int64_t zero(){
+//  int64_t r,_0,_1,_2;
+//  r=(int64_t)0;
+//  _0=r;
+//  _1=0;
+//  _2=_0+_1;
+//  return _2;
+// }
+func zero() (r int64) {
+	return r + 0
+}
+
 // int32_t multiassign(int32_t x){
 //  int32_t a,b,c,_0,_1,_2,_3,_4,_5,_6,_7,_8,_9,_10;
+//  a=(int32_t)0;
+//  b=(int32_t)0;
+//  c=(int32_t)0;
 //  _0=x;
 //  _1=t(_0);
 //  _2=x;
