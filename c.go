@@ -539,9 +539,6 @@ func (c CallIndirect) c(w io.Writer) {
 	c.Func.c(w)
 	n := c1()
 	args := ccall(w, "", c.Args, c.ResType)
-	for i := range c.Args {
-		c.Args[i].c(w)
-	}
 	r := "void"
 	as := ""
 	if len(c.ResType) == 1 {

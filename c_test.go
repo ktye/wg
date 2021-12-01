@@ -1,6 +1,8 @@
 //go:build ignore
 package wg
 
+import . "github.com/ktye/wg/module"
+
 // int32_t f(){
 //  int32_t _0;
 //  _0=0;
@@ -89,4 +91,18 @@ func zero() (r int64) {
 func multiassign(x int32) int32 {
 	a, b, c := t(x), t(x), t(x)
 	return a + b + c
+}
+
+type f2 = func(int32, int32) int32
+
+// int32_t indir(int32_t x, int32_t y, int32_t z){
+//  int32_t _0,_1,_2,_3;
+//  _0=x;
+//  _1=y;
+//  _2=z;
+//  _3=((int32_t(*)(int32_t,int32_t))_F[_0])(_1, _2);
+//  return _3;
+// }
+func indir(x, y, z int32) int32 {
+	return Func[x].(f2)(y, z)
 }
