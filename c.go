@@ -594,7 +594,7 @@ func (s Switch) c(w io.Writer) {
 func (f For) c(w io.Writer) {
 	if f.Simple {
 		fmt.Fprintf(w, "do{\n")
-		f.Body.c(w)
+		f.Body[:len(f.Body)-1].c(w) // strip continue
 		if f.Post != nil {
 			f.Post.c(w)
 		}
