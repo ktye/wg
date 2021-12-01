@@ -674,7 +674,7 @@ void Memorycopy2(int32_t dst, int32_t src, int32_t n){ memcpy(_M2+dst, _M2+src, 
 void Memorycopy3(int32_t dst, int32_t src, int32_t n){ memcpy( _M+dst, _M2+src, n); }
 void Memoryfill(int32_t p, int32_t v, int32_t n){ memset(_M+p, (int)v, (size_t)n); }
 int32_t I32clz(uint32_t x) { return (int32_t)__builtin_clz((unsigned int)x); }
-int32_t I64popcnt(uint64_t x){ return (int32_t)__builtin_popcountl(x); }
+int32_t I64popcnt(uint64_t x){ return (int32_t)__builtin_popcountll(x); }
 void i8x16abs(i8x16 dst, i8x16 src){
  dst[0]=(src[0]<0)?-src[0]:src[0];
  dst[1]=(src[1]<0)?-src[1]:src[1];
@@ -804,7 +804,8 @@ int32_t wasi_path_open(int32_t fd, int32_t dirflags, int32_t path, int32_t pathl
  return 0;
 }
 int32_t wasi_fd_seek(int32_t fp, int64_t offset, int32_t whence, int32_t rp){
- *((int32_t*)(_M+rp))=(int32_t)fseek(_fd_, (long int)offset, (int)whence);
+ (int32_t)fseek(_fd_, (long int)offset, (int)whence);
+ *((int32_t*)(_M+rp))=(int32_t)ftell(_fd_);
  return 0;
 }
 int32_t wasi_fd_close(int32_t fp){ fclose(_fd_); return 0; }
