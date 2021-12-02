@@ -21,6 +21,10 @@ func main() {
 		c = true
 		a = a[1:]
 	}
+	if a[0] == "-nomain" { // -c only
+		wg.Nomain = true
+		a = a[1:]
+	}
 	m := wg.Parse(a[0])
 	if c {
 		m.C(os.Stdout)

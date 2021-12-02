@@ -11,6 +11,7 @@ import (
 )
 
 // convert wg ast to C
+var Nomain bool
 var gtyp map[string]Type
 var ltyp map[string]Type
 var ftyp map[string][]Type
@@ -95,7 +96,9 @@ func (m Module) C(out io.Writer) {
 		}
 	}
 	fmt.Fprintf(w, "}\n")
-	w.Write([]byte(ctail))
+	if Nomain == false {
+		w.Write([]byte(cmain))
+	}
 	out.Write(dumbindent.FormatBytes(nil, buf.Bytes(), &dumbindent.Options{Spaces: 1}))
 }
 func cquote(s string) string {
@@ -842,7 +845,7 @@ int32_t wasi_fd_seek(int32_t fp, int64_t offset, int32_t whence, int32_t rp){
 int32_t wasi_fd_close(int32_t fp){ fclose(_fd_); return 0; }
 void panic() { longjmp(_jb_,1); }
 `
-const ctail string = `int main(int args, char **argv){
+const cmain string = `int main(int args, char **argv){
  args_=(int32_t)args;
  argv_=argv;
  cinit();

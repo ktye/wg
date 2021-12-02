@@ -1,4 +1,5 @@
 //go:build ignore
+
 package wg
 
 import . "github.com/ktye/wg/module"
