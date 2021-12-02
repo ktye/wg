@@ -15,7 +15,7 @@ func Memory(blocks int) {
 }
 func Memory2(blocks int) {
 	if Bytes2 == nil {
-		Bytes = make([]byte, 64*1024*blocks)
+		Bytes2 = make([]byte, 64*1024*blocks)
 	}
 }
 func Memorysize() int32  { return int32(len(Bytes) >> 16) }

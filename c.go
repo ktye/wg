@@ -74,7 +74,7 @@ func (m Module) C(out io.Writer) {
 	if m.Memory != "" {
 		fmt.Fprintf(w, "_M=calloc(%s, 64*1024);\n", m.Memory)
 	}
-	if m.Memory2 != "" && MultiMemory {
+	if m.Memory2 != "" {
 		fmt.Fprintf(w, "_M2=calloc(%s, 64*1024);\n", m.Memory)
 	}
 	for _, d := range m.Data {
@@ -186,6 +186,9 @@ func cfunc(w io.Writer, f Func) {
 			fmt.Fprintf(&buf, "%s=(%s)0;\n", cname(l.Name), ctype(l.Type))
 		}
 	}
+	if f.Defer != nil {
+		fmt.Fprintf(&buf, "if(!setjmp(_jb_)){\n")
+	}
 	for _, st := range f.Body {
 		st.c(&buf)
 	}
@@ -213,6 +216,11 @@ func cfunc(w io.Writer, f Func) {
 			t = append(t, k)
 		}
 		panic("there are unknown local types: " + strings.Join(t, "|"))
+	}
+	if f.Defer != nil {
+		fmt.Fprintf(&buf, "}else{\n")
+		f.Defer.c(&buf)
+		fmt.Fprintf(&buf, "}\n")
 	}
 	io.Copy(w, &buf)
 	fmt.Fprintf(w, "}\n")
@@ -511,7 +519,7 @@ func (c Call) c(w io.Writer) {
 		fmt.Fprintf(w, "%s=*(uint64_t*)&%s;\n", c1n("uint64_t"), c2())
 	case "panic":
 		ccall(w, "", c.Args, []Type{I32})
-		fmt.Fprintln(w, "exit(1); // todo: trap")
+		fmt.Fprintln(w, "panic();")
 	case "Memorysize":
 		fmt.Fprintf(w, "%s=_memorysize;\n", c1n("int32_t"))
 	case "Memorysize2":
@@ -653,6 +661,7 @@ const chead string = `#include<stdio.h>
 #include<stdint.h>
 #include<string.h>
 #include<time.h>
+#include<setjmp.h>
 typedef int8_t  i8x16 __attribute__ ((vector_size (16)));
 typedef int32_t i32x4 __attribute__ ((vector_size (16)));
 typedef double  f64x2 __attribute__ ((vector_size (16)));
@@ -668,6 +677,7 @@ int32_t _memorysize, _memorysize2;
 FILE *_fd_;
 int    args_;
 char **argv_;
+static jmp_buf _jb_;
 int32_t Memorygrow(int32_t delta){
  int32_t r=_memorysize;
  _memorysize+=delta;
@@ -681,7 +691,7 @@ int32_t Memorygrow2(int32_t delta){
  return r;
 }
 void Memorycopy (int32_t dst, int32_t src, int32_t n){ memcpy(_M +dst, _M +src, n); }
-void Memorycopy2(int32_t dst, int32_t src, int32_t n){ memcpy(_M2+dst, _M2+src, n); }
+void Memorycopy2(int32_t dst, int32_t src, int32_t n){ memcpy(_M2+dst, _M +src, n); }
 void Memorycopy3(int32_t dst, int32_t src, int32_t n){ memcpy( _M+dst, _M2+src, n); }
 void Memoryfill(int32_t p, int32_t v, int32_t n){ memset(_M+p, (int)v, (size_t)n); }
 int32_t I32clz(uint32_t x) { return (int32_t)__builtin_clz((unsigned int)x); }
@@ -830,6 +840,7 @@ int32_t wasi_fd_seek(int32_t fp, int64_t offset, int32_t whence, int32_t rp){
  return 0;
 }
 int32_t wasi_fd_close(int32_t fp){ fclose(_fd_); return 0; }
+void panic() { longjmp(_jb_,1); }
 `
 const ctail string = `int main(int args, char **argv){
  args_=(int32_t)args;
