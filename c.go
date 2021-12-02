@@ -760,12 +760,21 @@ uint64_t wasi_clock_time_get(int32_t id, int32_t prec, int32_t res){
  clock_gettime((clockid_t)id, &t);
  return (uint64_t)(1000000000L)*(uint64_t)(t.tv_sec) + (uint64_t)t.tv_nsec;
 }
+int32_t getline_(char *p, int n){
+ char *r = fgets(p, n, stdin);
+ if(r==NULL){ //todo eof
+  return -1;
+ }else return (int32_t)strnlen(p,n);
+}
 int32_t wasi_fd_read(int32_t fd, int32_t p, int32_t nio, int32_t wa){
  FILE  *fp=stdin;
+ int32_t w;
  int32_t a=*((int32_t*)(_M+p));
  int32_t n=*((int32_t*)(_M+p+4));
- if(fd!=0)fp=_fd_;
- int32_t w=(int32_t)fread(_M+a, 1, (size_t)n, fp);
+ if(fd!=0){
+  fp=_fd_;
+  w=(int32_t)fread(_M+a, 1, (size_t)n, fp);
+ }else  w=getline_(_M+a, (int)n);
  *((int32_t*)(_M+wa))=w;
  return w<0;
 }
@@ -776,6 +785,7 @@ int32_t wasi_fd_write(int32_t fd, int32_t p, int32_t nio, int32_t wa){
  if(fd!=1)fp=_fd_;
  if(fd==2)fp=stderr;
  int32_t w=(int32_t)fwrite(_M+a, 1, (size_t)n, fp);
+ if(fd==1)fflush(stdout);
  *((int32_t*)(_M+wa))=w;
  return w<0;
 }
@@ -798,8 +808,8 @@ int32_t wasi_path_open(int32_t fd, int32_t dirflags, int32_t path, int32_t pathl
  char *name=malloc(1+pathlen);
  memcpy(name,_M+path,1+pathlen);
  name[pathlen]=0;
- if(oflags==0) _fd_=fopen(name,"r");//assume read
- else          printf("todo: write to %s\n", name);  //_fd_=fopen(name,"w");  //assume write
+ if(oflags==0) _fd_=fopen(name,"r"); //assume read
+ else          _fd_=fopen(name,"w"); //assume write
  free(name);
  return 0;
 }
