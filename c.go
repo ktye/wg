@@ -24,7 +24,9 @@ func (m Module) C(out io.Writer) {
 	var buf bytes.Buffer
 	w := &buf
 	w.Write([]byte(chead))
-
+	for i, f := range m.Funcs {
+		m.Funcs[i].Name = renameBuiltins(f.Name)
+	}
 	for _, f := range m.Funcs {
 		if f.Name == "main" {
 			continue
@@ -236,7 +238,7 @@ func (a Assign) c(w io.Writer) {
 		e.c(w)
 		n := 1
 		if ec, ok := e.(Call); ok {
-			if rt, ok := ftyp[ec.Func]; ok {
+			if rt, ok := ftyp[renameBuiltins(ec.Func)]; ok {
 				n = len(rt)
 			}
 		}
@@ -265,7 +267,7 @@ func (a Assign) c(w io.Writer) {
 	}
 	for i, s := range a.Name {
 		if len(a.Name) != len(c) {
-			panic(fmt.Sprintf("multi-assign %d values to %d vars", len(c), len(a.Name)))
+			panic(fmt.Sprintf("multi-assign %d values to %d vars (%s)", len(c), len(a.Name), a.Name))
 		}
 		if s == "_" {
 			continue
@@ -355,11 +357,11 @@ func (c Call) c(w io.Writer) {
 		//if f == "I32clz" {
 		//	fmt.Fprintf(w, "// rt: %d\n", len(rt))
 		//}
-		rt, ok := ftyp[c.Func]
+		rt, ok := ftyp[f]
 		if !ok {
-			panic(string(c.Func) + " is not defined")
+			panic(string(f) + " is not defined")
 		}
-		args := ccall(w, c.Func, c.Args, rt)
+		args := ccall(w, f, c.Args, rt)
 		if len(rt) == 1 {
 			fmt.Fprintf(w, "%s=", c1n(rt[0]))
 		}
@@ -532,7 +534,7 @@ func (c Call) c(w io.Writer) {
 		fmt.Fprintf(w, "%s=wasi_%s(%s);", c1n("int32_t"), f, strings.Join(a, ","))
 	default:
 		// nyi: "I64clz", "I32ctz", "I64ctz", "I32popcnt", "I64popcnt", "F64abs", "F64sqrt", "F64ceil", "F64floor", "F64nearest", "F64min", "F64max", "F64copysign", "I64reinterpret_f64", "F64reinterpret_i64", "I32reinterpret_f32", "F32reinterpret_i32"
-		call(c.Func)
+		call(renameBuiltins(c.Func))
 	}
 }
 func (c CallIndirect) c(w io.Writer) {
@@ -635,6 +637,15 @@ func (p Printf) c(w io.Writer) {
 		fmt.Fprintf(w, ",%s", a)
 	}
 	fmt.Fprintf(w, ");fflush(stdout);\n")
+}
+
+func renameBuiltins(name string) string {
+	for _, s := range []string{"ldexp", "frexp", "isnan"} {
+		if name == s {
+			return s + "_"
+		}
+	}
+	return name
 }
 
 const chead string = `#include<stdio.h>
