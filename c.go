@@ -11,7 +11,7 @@ import (
 )
 
 // convert wg ast to C
-var Nomain bool
+var Lib string
 var gtyp map[string]Type
 var ltyp map[string]Type
 var ftyp map[string][]Type
@@ -24,9 +24,9 @@ func (m Module) C(out io.Writer) {
 	farg = make(map[string]int)
 	var buf bytes.Buffer
 	w := &buf
-	w.Write([]byte(chead))
+	w.Write([]byte(replacePrefix(chead)))
 	for i, f := range m.Funcs {
-		m.Funcs[i].Name = renameBuiltins(f.Name)
+		m.Funcs[i].Name = prefix(f.Name)
 	}
 	for _, f := range m.Funcs {
 		if f.Name == "main" {
@@ -41,13 +41,13 @@ func (m Module) C(out io.Writer) {
 		farg[f.Name] = len(f.Args)
 	}
 	// register return type for some built-in functions
-	for _, s := range []string{"Memorycopy", "Memorycopy2", "Memorycopy3", "Memoryfill"} {
+	for _, s := range prefixs([]string{"Memorycopy", "Memorycopy2", "Memorycopy3", "Memoryfill"}) {
 		ftyp[s] = []Type{}
 	}
-	for _, s := range []string{"Memorygrow", "Memorygrow2", "I32clz", "I64popcnt"} {
+	for _, s := range prefixs([]string{"Memorygrow", "Memorygrow2", "I32clz", "I64popcnt"}) {
 		ftyp[s] = []Type{I32}
 	}
-	for _, s := range []string{"F64abs", "F64sqrt", "F64copysign", "F64min", "F64max", "F64floor"} {
+	for _, s := range prefixs([]string{"F64abs", "F64sqrt", "F64copysign", "F64min", "F64max", "F64floor"}) {
 		ftyp[s] = []Type{F64}
 	}
 
@@ -71,7 +71,7 @@ func (m Module) C(out io.Writer) {
 		f.Exported = m.Exports[f.Name] || m.exportAll
 		cfunc(w, f)
 	}
-	fmt.Fprintf(w, "void cinit(){\n_memorysize=1;\n_memorysize2=1;\n")
+	fmt.Fprintf(w, "void %scinit(){\n_memorysize=1;\n_memorysize2=1;\n", Lib)
 	if m.Memory != "" {
 		fmt.Fprintf(w, "_M=calloc(%s, 64*1024);\n", m.Memory)
 	}
@@ -92,11 +92,11 @@ func (m Module) C(out io.Writer) {
 	fmt.Fprintf(w, "_F=(void *)malloc(%d*sizeof(void*));\n", tmax)
 	for _, e := range m.Table {
 		for i := range e.Names {
-			fmt.Fprintf(w, "_F[%d]=%s;\n", e.Off+i, e.Names[i])
+			fmt.Fprintf(w, "_F[%d]=%s;\n", e.Off+i, prefix(e.Names[i]))
 		}
 	}
 	fmt.Fprintf(w, "}\n")
-	if Nomain == false {
+	if Lib == "" {
 		w.Write([]byte(cmain))
 	}
 	out.Write(dumbindent.FormatBytes(nil, buf.Bytes(), &dumbindent.Options{Spaces: 1}))
@@ -249,7 +249,7 @@ func (a Assign) c(w io.Writer) {
 		e.c(w)
 		n := 1
 		if ec, ok := e.(Call); ok {
-			if rt, ok := ftyp[renameBuiltins(ec.Func)]; ok {
+			if rt, ok := ftyp[prefix(ec.Func)]; ok {
 				n = len(rt)
 			}
 		}
@@ -513,7 +513,7 @@ func (c Call) c(w io.Writer) {
 		c.Args[0].c(w)
 		y := c1()
 		x := c1n("f64x2")
-		fmt.Fprintf(w, "%s[0]=F64%s(%s[0]);%s[1]=F64%s(%s[1]);\n", x, op, y, x, op, y)
+		fmt.Fprintf(w, "%s[0]=%sF64%s(%s[0]);%s[1]=%sF64%s(%s[1]);\n", x, Lib, op, y, x, Lib, op, y)
 	case "F64reinterpret_i64":
 		c.Args[0].c(w)
 		fmt.Fprintf(w, "%s=*(double*)&%s;\n", c1n("double"), c2())
@@ -545,7 +545,7 @@ func (c Call) c(w io.Writer) {
 		fmt.Fprintf(w, "%s=wasi_%s(%s);", c1n("int32_t"), f, strings.Join(a, ","))
 	default:
 		// nyi: "I64clz", "I32ctz", "I64ctz", "I32popcnt", "I64popcnt", "F64abs", "F64sqrt", "F64ceil", "F64floor", "F64nearest", "F64min", "F64max", "F64copysign", "I64reinterpret_f64", "F64reinterpret_i64", "I32reinterpret_f32", "F32reinterpret_i32"
-		call(renameBuiltins(c.Func))
+		call(prefix(c.Func))
 	}
 }
 func (c CallIndirect) c(w io.Writer) {
@@ -650,13 +650,13 @@ func (p Printf) c(w io.Writer) {
 	fmt.Fprintf(w, ");fflush(stdout);\n")
 }
 
-func renameBuiltins(name string) string {
-	for _, s := range []string{"ldexp", "frexp", "isnan"} {
-		if name == s {
-			return s + "_"
-		}
+func prefix(name string) string     { return Lib + name }
+func replacePrefix(s string) string { return strings.Replace(s, "$", Lib, -1) }
+func prefixs(v []string) []string {
+	for i := range v {
+		v[i] = Lib + v[i]
 	}
-	return name
+	return v
 }
 
 const chead string = `#include<stdio.h>
@@ -668,12 +668,12 @@ const chead string = `#include<stdio.h>
 typedef int8_t  i8x16 __attribute__ ((vector_size (16)));
 typedef int32_t i32x4 __attribute__ ((vector_size (16)));
 typedef double  f64x2 __attribute__ ((vector_size (16)));
-#define F64abs        __builtin_fabs
-#define F64sqrt       __builtin_sqrt
-#define F64floor      __builtin_floor
-#define F64min        __builtin_fmin
-#define F64max        __builtin_fmax
-#define F64copysign   __builtin_copysign
+#define $F64abs        __builtin_fabs
+#define $F64sqrt       __builtin_sqrt
+#define $F64floor      __builtin_floor
+#define $F64min        __builtin_fmin
+#define $F64max        __builtin_fmax
+#define $F64copysign   __builtin_copysign
 char *_M, *_M2;
 void **_F;
 int32_t _memorysize, _memorysize2;
@@ -681,24 +681,24 @@ FILE *_fd_;
 int    args_;
 char **argv_;
 static jmp_buf _jb_;
-int32_t Memorygrow(int32_t delta){
+int32_t $Memorygrow(int32_t delta){
  int32_t r=_memorysize;
  _memorysize+=delta;
  _M=(char *)realloc(_M, 64*1024*_memorysize);
  return r;
 }
-int32_t Memorygrow2(int32_t delta){
+int32_t $Memorygrow2(int32_t delta){
  int32_t r=_memorysize2;
  _memorysize2+=delta;
  _M2=(char *)realloc(_M2, 64*1024*_memorysize2);
  return r;
 }
-void Memorycopy (int32_t dst, int32_t src, int32_t n){ memcpy(_M +dst, _M +src, n); }
-void Memorycopy2(int32_t dst, int32_t src, int32_t n){ memcpy(_M2+dst, _M +src, n); }
-void Memorycopy3(int32_t dst, int32_t src, int32_t n){ memcpy( _M+dst, _M2+src, n); }
-void Memoryfill(int32_t p, int32_t v, int32_t n){ memset(_M+p, (int)v, (size_t)n); }
-int32_t I32clz(uint32_t x) { return (int32_t)__builtin_clz((unsigned int)x); }
-int32_t I64popcnt(uint64_t x){ return (int32_t)__builtin_popcountll(x); }
+void $Memorycopy (int32_t dst, int32_t src, int32_t n){ memcpy(_M +dst, _M +src, n); }
+void $Memorycopy2(int32_t dst, int32_t src, int32_t n){ memcpy(_M2+dst, _M +src, n); }
+void $Memorycopy3(int32_t dst, int32_t src, int32_t n){ memcpy( _M+dst, _M2+src, n); }
+void $Memoryfill(int32_t p, int32_t v, int32_t n){ memset(_M+p, (int)v, (size_t)n); }
+int32_t $I32clz(uint32_t x) { return (int32_t)__builtin_clz((unsigned int)x); }
+int32_t $I64popcnt(uint64_t x){ return (int32_t)__builtin_popcountll(x); }
 void i8x16abs(i8x16 *dst, i8x16 src){
  (*dst)[0]=(src[0]<0)?-src[0]:src[0];
  (*dst)[1]=(src[1]<0)?-src[1]:src[1];
