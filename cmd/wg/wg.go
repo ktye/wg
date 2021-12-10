@@ -21,9 +21,13 @@ func main() {
 		c = true
 		a = a[1:]
 	}
-	if a[0] == "-lib" { // -c only (no main, prefix symbols with a[1])
-		wg.Lib = a[1]
+	if a[0] == "-prefix" { // -c only prefix symbols with a[1]
+		wg.Prefix = a[1]
 		a = a[2:]
+	}
+	if a[0] == "-nomain" { // -c only skip main
+		wg.Nomain = true
+		a = a[1:]
 	}
 	m := wg.Parse(a[0])
 	if c {

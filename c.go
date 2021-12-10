@@ -11,7 +11,8 @@ import (
 )
 
 // convert wg ast to C
-var Lib string
+var Prefix string
+var Nomain bool
 var gtyp map[string]Type
 var ltyp map[string]Type
 var ftyp map[string][]Type
@@ -71,7 +72,7 @@ func (m Module) C(out io.Writer) {
 		f.Exported = m.Exports[f.Name] || m.exportAll
 		cfunc(w, f)
 	}
-	fmt.Fprintf(w, "void %scinit(){\n_memorysize=1;\n_memorysize2=1;\n", Lib)
+	fmt.Fprintf(w, "void %scinit(){\n_memorysize=1;\n_memorysize2=1;\n", Prefix)
 	if m.Memory != "" {
 		fmt.Fprintf(w, "_M=calloc(%s, 64*1024);\n", m.Memory)
 	}
@@ -96,8 +97,8 @@ func (m Module) C(out io.Writer) {
 		}
 	}
 	fmt.Fprintf(w, "}\n")
-	if Lib == "" {
-		w.Write([]byte(cmain))
+	if Nomain == false {
+		w.Write([]byte(cmain()))
 	}
 	out.Write(dumbindent.FormatBytes(nil, buf.Bytes(), &dumbindent.Options{Spaces: 1}))
 }
@@ -178,9 +179,6 @@ func cfunc(w io.Writer, f Func) {
 		ltyp[l.Name] = l.Type
 	}
 	cstk = nil
-	if f.Name == "main" {
-		f.Name = "main_"
-	}
 	sig := csig(f)
 	fmt.Fprintf(w, "%s{\n", sig)
 	var buf bytes.Buffer
@@ -513,7 +511,7 @@ func (c Call) c(w io.Writer) {
 		c.Args[0].c(w)
 		y := c1()
 		x := c1n("f64x2")
-		fmt.Fprintf(w, "%s[0]=%sF64%s(%s[0]);%s[1]=%sF64%s(%s[1]);\n", x, Lib, op, y, x, Lib, op, y)
+		fmt.Fprintf(w, "%s[0]=%sF64%s(%s[0]);%s[1]=%sF64%s(%s[1]);\n", x, Prefix, op, y, x, Prefix, op, y)
 	case "F64reinterpret_i64":
 		c.Args[0].c(w)
 		fmt.Fprintf(w, "%s=*(double*)&%s;\n", c1n("double"), c2())
@@ -650,11 +648,11 @@ func (p Printf) c(w io.Writer) {
 	fmt.Fprintf(w, ");fflush(stdout);\n")
 }
 
-func prefix(name string) string     { return Lib + name }
-func replacePrefix(s string) string { return strings.Replace(s, "$", Lib, -1) }
+func prefix(name string) string     { return Prefix + name }
+func replacePrefix(s string) string { return strings.Replace(s, "$", Prefix, -1) }
 func prefixs(v []string) []string {
 	for i := range v {
-		v[i] = Lib + v[i]
+		v[i] = Prefix + v[i]
 	}
 	return v
 }
@@ -845,10 +843,13 @@ int32_t wasi_fd_seek(int32_t fp, int64_t offset, int32_t whence, int32_t rp){
 int32_t wasi_fd_close(int32_t fp){ fclose(_fd_); return 0; }
 void panic() { longjmp(_jb_,1); }
 `
-const cmain string = `int main(int args, char **argv){
+
+func cmain() string {
+	return `int main(int args, char **argv){
  args_=(int32_t)args;
  argv_=argv;
- cinit();
- main_();
+ ` + Prefix + `cinit();
+ ` + Prefix + `main();
  return 0;
 }`
+}
