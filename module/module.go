@@ -39,18 +39,18 @@ func Memorygrow2(blocks int32) int32 {
 var Bytes []byte
 var Bytes2 []byte
 
-func I8(addr int32) int32    { return int32(int8(Bytes[addr])) }
-func U8(addr int32) uint32   { return uint32(Bytes[addr]) }
-func I16(addr int32) int32   { return int32(int16(binary.LittleEndian.Uint16(Bytes[addr:]))) }
-func U16(addr int32) uint32  { return uint32(binary.LittleEndian.Uint16(Bytes[addr:])) }
-func I32(addr int32) int32   { return int32(binary.LittleEndian.Uint32(Bytes[addr:])) }
-func U32(addr int32) uint32  { return binary.LittleEndian.Uint32(Bytes[addr:]) }
-func I64(addr int32) int64   { return int64(binary.LittleEndian.Uint64(Bytes[addr:])) }
-func U64(addr int32) uint64  { return binary.LittleEndian.Uint64(Bytes[addr:]) }
-func F32(addr int32) float32 { return math.Float32frombits(binary.LittleEndian.Uint32(Bytes[addr:])) }
-func F64(addr int32) float64 { return math.Float64frombits(binary.LittleEndian.Uint64(Bytes[addr:])) }
+func I8(addr int32) int32           { return int32(int8(Bytes[addr])) }
+func U8(addr int32) uint32          { return uint32(Bytes[addr]) }
+func SetI8(addr int32, value int32) { Bytes[addr] = byte(value) }
 
-func SetI8(addr int32, value int32)  { Bytes[addr] = byte(value) }
+func I16(addr int32) int32           { return int32(int16(binary.LittleEndian.Uint16(Bytes[addr:]))) }
+func U16(addr int32) uint32          { return uint32(binary.LittleEndian.Uint16(Bytes[addr:])) }
+func I32(addr int32) int32           { return int32(binary.LittleEndian.Uint32(Bytes[addr:])) }
+func U32(addr int32) uint32          { return binary.LittleEndian.Uint32(Bytes[addr:]) }
+func I64(addr int32) int64           { return int64(binary.LittleEndian.Uint64(Bytes[addr:])) }
+func U64(addr int32) uint64          { return binary.LittleEndian.Uint64(Bytes[addr:]) }
+func F32(addr int32) float32         { return math.Float32frombits(binary.LittleEndian.Uint32(Bytes[addr:])) }
+func F64(addr int32) float64         { return math.Float64frombits(binary.LittleEndian.Uint64(Bytes[addr:])) }
 func SetI16(addr int32, value int32) { binary.LittleEndian.PutUint16(Bytes[addr:], uint16(value)) }
 func SetI32(addr int32, value int32) { binary.LittleEndian.PutUint32(Bytes[addr:], uint32(value)) }
 func SetI64(addr int32, value int64) { binary.LittleEndian.PutUint64(Bytes[addr:], uint64(value)) }
@@ -60,6 +60,22 @@ func SetF32(addr int32, value float32) {
 func SetF64(addr int32, value float64) {
 	binary.LittleEndian.PutUint64(Bytes[addr:], math.Float64bits(value))
 }
+
+/* unsafe variants
+func I16(addr int32) int32             { return int32(*(*int16)(unsafe.Pointer(&Bytes[addr]))) }
+func U16(addr int32) uint32            { return uint32(*(*uint16)(unsafe.Pointer(&Bytes[addr]))) }
+func I32(addr int32) int32             { return *(*int32)(unsafe.Pointer(&Bytes[addr])) }
+func U32(addr int32) uint32            { return *(*uint32)(unsafe.Pointer(&Bytes[addr])) }
+func I64(addr int32) int64             { return *(*int64)(unsafe.Pointer(&Bytes[addr])) }
+func U64(addr int32) uint64            { return *(*uint64)(unsafe.Pointer(&Bytes[addr])) }
+func F32(addr int32) float32           { return *(*float32)(unsafe.Pointer(&Bytes[addr])) }
+func F64(addr int32) float64           { return *(*float64)(unsafe.Pointer(&Bytes[addr])) }
+func SetI16(addr int32, value int32)   { *(*int16)(unsafe.Pointer(&Bytes[addr])) = int16(value) }
+func SetI32(addr int32, value int32)   { *(*int32)(unsafe.Pointer(&Bytes[addr])) = value }
+func SetI64(addr int32, value int64)   { *(*int64)(unsafe.Pointer(&Bytes[addr])) = value }
+func SetF32(addr int32, value float32) { *(*float32)(unsafe.Pointer(&Bytes[addr])) = value }
+func SetF64(addr int32, value float64) { *(*float64)(unsafe.Pointer(&Bytes[addr])) = value }
+*/
 
 // Func is the indirect function table. Calling needs to do a type assertion.
 var Func []interface{}
