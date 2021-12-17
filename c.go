@@ -830,8 +830,8 @@ int32_t wasi_path_open(int32_t fd, int32_t dirflags, int32_t path, int32_t pathl
  char *name=malloc(1+pathlen);
  memcpy(name,_M+path,1+pathlen);
  name[pathlen]=0;
- if(oflags==0) _fd_=fopen(name,"r"); //assume read
- else          _fd_=fopen(name,"w"); //assume write
+ if(oflags==0) _fd_=fopen(name,"rb"); //assume read
+ else          _fd_=fopen(name,"wb"); //assume write
  free(name);
  return 0;
 }
