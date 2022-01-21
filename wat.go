@@ -41,7 +41,7 @@ func (m Module) Wat(w io.Writer) {
 			if g.Const[i] == false {
 				mut = "(mut " + t.String() + ")"
 			}
-			fmt.Fprintf(w, "(global $%s %s (%s.const %s))\n", s, mut, t, u)
+			fmt.Fprintf(w, "(global $%s (export \"%s\") %s (%s.const %s))\n", s, s, mut, t, u)
 		}
 	}
 	for _, d := range m.Data {
