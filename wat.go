@@ -58,7 +58,7 @@ func (m Module) Wat(w io.Writer) {
 			tmax = n
 		}
 	}
-	fmt.Fprintf(w, "(table %d funcref)\n", tmax)
+	fmt.Fprintf(w, "(table (export \"table\") %d funcref)\n", tmax)
 	for _, e := range m.Table {
 		fmt.Fprintf(w, "(elem (i32.const %d) func", e.Off)
 		for i := range e.Names {
