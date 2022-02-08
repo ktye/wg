@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/ktye/wg/module"
+	. "github.com/ktye/wg/module"
 )
 
 type ClockID int32
@@ -29,7 +29,7 @@ var (
 //func L32(x int32) int32   { fmt.Println(x); return x }
 //func L64(x uint64) uint64 { fmt.Println(x); return x }
 func Clock_time_get(id ClockID, prec Timestamp, res int32) int32 {
-	module.SetI64(res, time.Now().UnixNano())
+	SetI64(res, time.Now().UnixNano())
 	return 0
 }
 
@@ -39,11 +39,11 @@ func Clock_time_get(id ClockID, prec Timestamp, res int32) int32 {
 //   p[8:]:  data
 // written is a memory location that receive the number of bytes written.
 func Fd_read(fd, p, niovec, written int32) int32 {
-	addr := module.I32(p)
-	n := module.I32(4 + p)
+	addr := I32(p)
+	n := I32(4 + p)
 	if fd == 0 {
-		nr, err := Stdin.Read(module.Bytes[addr : addr+n])
-		module.SetI32(written, int32(nr))
+		nr, err := Stdin.Read(Bytes[addr : addr+n])
+		SetI32(written, int32(nr))
 		if err == nil {
 			return 0
 		}
@@ -53,23 +53,23 @@ func Fd_read(fd, p, niovec, written int32) int32 {
 	if o == false {
 		return 1
 	}
-	copy(module.Bytes[addr:], f.b[:n])
+	copy(Bytes[addr:], f.b[:n])
 	f.b = f.b[n:]
 	files[fd] = f
-	module.SetI32(written, n)
+	SetI32(written, n)
 	return 0
 }
 func Fd_write(fd, p, niovec, written int32) int32 {
-	addr := module.I32(p)
-	n := module.I32(4 + p)
-	b := module.Bytes[addr : addr+n]
+	addr := I32(p)
+	n := I32(4 + p)
+	b := Bytes[addr : addr+n]
 	if fd == 1 || fd == 2 {
 		w := Stdout
 		if fd == 2 {
 			w = Stderr
 		}
 		nw, err := w.Write(b)
-		module.SetI32(written, int32(nw))
+		SetI32(written, int32(nw))
 		if err == nil {
 			return 0
 		}
@@ -80,7 +80,7 @@ func Fd_write(fd, p, niovec, written int32) int32 {
 		}
 		f.b = append(f.b, b...)
 		files[fd] = f
-		module.SetI32(written, int32(len(b)))
+		SetI32(written, int32(len(b)))
 		return 0
 	}
 	return 1
@@ -91,9 +91,9 @@ func Fd_seek(fp int32, offset int64, whence int32, rp int32) int32 {
 		return 1
 	}
 	if whence == 2 {
-		module.SetI32(rp, int32(len(f.b)))
+		SetI32(rp, int32(len(f.b)))
 	} else {
-		module.SetI32(rp, 0)
+		SetI32(rp, 0)
 	}
 	return 0
 }
@@ -107,7 +107,7 @@ var files map[int32]openfile
 
 func Path_open(fd, dirflags, path, pathlen, oflags int32, baserights, inheritrights int64, fdflags, newfp int32) int32 {
 	fp := int32(3 + len(files))
-	name := string(module.Bytes[path : path+pathlen])
+	name := string(Bytes[path : path+pathlen])
 	if oflags == 0 { // assume read
 		b, e := ioutil.ReadFile(name)
 		if e != nil {
@@ -118,7 +118,7 @@ func Path_open(fd, dirflags, path, pathlen, oflags int32, baserights, inheritrig
 	} else { // assume write file
 		files[fp] = openfile{name: name, b: make([]byte, 0)}
 	}
-	module.SetI32(newfp, fp)
+	SetI32(newfp, fp)
 	return 0
 }
 
@@ -139,14 +139,14 @@ func Proc_exit(x int32) { os.Exit(int(x)) }
 
 func Args_sizes_get(np, sp int32) int32 {
 	s, n := getargs()
-	module.SetI32(np, n)
-	module.SetI32(sp, int32(len(s)))
+	SetI32(np, n)
+	SetI32(sp, int32(len(s)))
 	return 0
 }
 func Args_get(p, sp int32) int32 {
 	s, _ := getargs()
 	// p (**argv) is ignored
-	copy(module.Bytes[sp:], s)
+	copy(Bytes[sp:], s)
 	return 0
 }
 func getargs() (r []byte, n int32) {
