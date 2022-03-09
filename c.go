@@ -337,7 +337,11 @@ func (b Binary) c(w io.Writer) {
 	fmt.Fprintf(w, "%s=%s%s%s;\n", c1n(t), x, b.Op.Name, y)
 }
 func (l Literal) c(w io.Writer) {
-	fmt.Fprintf(w, "%s=%s;\n", c1n(l.Type), l.Value)
+	t, v := c1n(l.Type), l.Value
+	if l.Type == I64 && v == "-9223372036854775808" {
+		v = "(int64_t)9223372036854775808ULL" // prevent error "integer constant is so large that it is unsigned"
+	}
+	fmt.Fprintf(w, "%s=%s;\n", t, v)
 }
 func ccall(w io.Writer, f string, args []Expr, rt []Type) []string {
 	var a []string
