@@ -4,11 +4,13 @@ import (
 	"os"
 
 	"github.com/ktye/wg"
+	"github.com/ktye/wg/f77"
 )
 
 func main() {
 	a := os.Args[1:]
 	c := false
+	f := false
 	if a[0] == "-try" {
 		wg.TryCatch = true
 		a = a[1:]
@@ -17,8 +19,12 @@ func main() {
 		wg.MultiMemory = true
 		a = a[1:]
 	}
-	if a[0] == "-c" {
+	if a[0] == "-c" { // C
 		c = true
+		a = a[1:]
+	}
+	if a[0] == "-f" { // f77
+		f = true
 		a = a[1:]
 	}
 	if a[0] == "-prefix" { // -c only prefix symbols with a[1]
@@ -32,6 +38,8 @@ func main() {
 	m := wg.Parse(a[0])
 	if c {
 		m.C(os.Stdout)
+	} else if f {
+		f77.F(os.Stdout, m)
 	} else {
 		m.Wat(os.Stdout)
 	}
