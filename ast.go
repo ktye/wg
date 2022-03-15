@@ -67,7 +67,7 @@ type Func struct {
 	Name     string
 	Args     []Arg
 	Rets     []Type
-	Locs     []Local
+	Locs     []Local // without args or rets
 	Body     Stmts
 	Doc      string
 	Defer    Expr // Call
