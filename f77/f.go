@@ -28,6 +28,7 @@ var typ map[string]wg.Type // name77
 var GLO map[string]wg.Type // name77 (all globals)
 var glo map[string]bool    // name77 (within a function)
 var CUR wg.Func            // current function
+var heap bool              // func uses heap
 var stk []string
 var glb []byte // global declarations
 var w io.Writer
@@ -38,8 +39,10 @@ func init() {
 		reserved[s] = true
 	}
 	t77_ = map[wg.Type]string{
+		wg.U32: "INTEGER*4",
 		wg.I32: "INTEGER*4",
 		wg.I64: "INTEGER*8",
+		wg.U64: "INTEGER*8",
 		wg.F64: "REAL*8",
 	}
 	bop_ = map[wg.Op]string{
@@ -88,6 +91,7 @@ func F(out io.Writer, m wg.Module) {
 	w = &buf
 
 	w.Write([]byte(fhead))
+	w.Write([]byte(mem))
 	w.Write(glb)
 
 	for i := range g { // global initialization
@@ -116,10 +120,11 @@ func f77Func(m wg.Module, k int) {
 	f := m.Funcs[k]
 	CUR = f
 
-	_ll, ll_ := _loc, loc_
+	_ll, ll_, heap_ := _loc, loc_, heap
 	initLocs(f)
+	heap = false
 	defer func() {
-		_loc, loc_ = _ll, ll_
+		_loc, loc_, heap = _ll, ll_, heap_
 	}()
 
 	v := make([]string, len(f.Args))
@@ -155,6 +160,9 @@ func f77Func(m wg.Module, k int) {
 	}
 	w = w_
 
+	if heap { // only write heap declaration if the function uses it
+		w.Write([]byte(mem))
+	}
 	d := make(map[string][]string)
 	for v := range _loc {
 		tt, o := typ[v]
@@ -246,18 +254,42 @@ func retrn(r wg.Return) {
 }
 func cast(c wg.Cast) {
 	if c.Dst == c.Src {
-		panic("cast to same type?")
+		push(ev(c.Arg))
+		return
 	}
 	switch c.Dst {
+	case wg.I32, wg.U32:
+		push("INT(" + ev(c.Arg) + ",4)")
+	case wg.I64, wg.U64:
+		push("INT(" + ev(c.Arg) + ",8)")
 	case wg.F64:
 		push("REAL(" + ev(c.Arg) + ",8)")
 	default:
+		// unsigned (wg.U64)  may print like signed "i64"
 		panic(fmt.Sprintf("nyi: cast to %v from %v", c.Dst, c.Src))
 	}
 }
 func binary(b wg.Binary) {
 	x, y, s := ev(b.X), ev(b.Y), ssa(b.Op.Type)
-	fmt.Fprintf(w, "%s = %s %s %s\n", s, x, bop(b.Op), y)
+
+	f := ""
+	switch b.Op.Name {
+	case "<<", ">>":
+		f = "SHIFTR"
+		if b.Op.Type == wg.U32 || b.Op.Type == wg.U64 {
+			f = "SHIFTA"
+		}
+		if b.Op.Name == "<<" {
+			f = "SHIFTL"
+		}
+	case "|":
+		f = "IOR"
+	}
+	if f == "" {
+		fmt.Fprintf(w, "%s = %s %s %s\n", s, x, bop(b.Op), y)
+	} else {
+		fmt.Fprintf(w, "%s = %s(%s, %s)\n", s, f, x, y)
+	}
 }
 func unary(u wg.Unary) {
 	x := ev(u.X)
@@ -305,6 +337,13 @@ func litstr(l wg.Literal) string {
 	switch l.Type {
 	case wg.I32: // ssa(wg.I32)
 		return fmt.Sprintf("INT(%s,4)", l.Value)
+	case wg.U64:
+		u, e := strconv.ParseUint(l.Value, 10, 64)
+		if e != nil {
+			panic("cannot parse u64 literal: " + l.Value)
+		}
+		i := int64(u)
+		return fmt.Sprintf("INT(%d,8)", i)
 	case wg.I64:
 		return fmt.Sprintf("INT(%s,8)", l.Value)
 	case wg.F64:
@@ -339,6 +378,11 @@ func call(c wg.Call) {
 	for _, a := range c.Args {
 		args = append(args, ev(a))
 	}
+
+	if builtinCall(c, args) {
+		return
+	}
+
 	f := fun[c.Func]
 	if simple(f) == false {
 		for _, t := range f.Rets {
@@ -351,6 +395,47 @@ func call(c wg.Call) {
 		_loc[name] = "*function call*"
 		typ[name] = f.Rets[0]
 		push(name + "(" + args[0] + ")")
+	}
+}
+func builtinCall(c wg.Call, a []string) bool {
+	s := c.Func
+	switch s {
+	case "I8", "SetI8", "I32", "SetI32", "I64", "U64", "SetU64", "SetI64", "F64", "SetF64":
+		heap = true
+		set := false
+		if strings.HasPrefix(s, "Set") {
+			s = strings.TrimPrefix(s, "Set")
+			set = true
+		}
+		c := 'I'
+		if strings.HasPrefix(s, "F") {
+			c = 'F'
+		}
+		sz := 8
+		if strings.HasSuffix(s, "8") == false {
+			sz = atoi(s[len(s)-2:])
+		}
+		div := sz / 8
+		addr := fmt.Sprintf("1+(%s/%d)", a[0], div)
+		{
+
+			s := strings.TrimSuffix(strings.TrimPrefix(a[0], "INT("), ",4)")
+			a, e := strconv.ParseInt(s, 10, 64)
+			a /= int64(div)
+			if e == nil {
+				addr = fmt.Sprintf("%d", 1+a) // instead of "INT(xx,4)/4"
+			}
+
+		}
+		if set {
+			fmt.Fprintf(w, "%c%d(%s) = %s\n", c, sz, addr, a[1])
+		} else {
+			s := fmt.Sprintf("%c%d(%s)", c, sz, addr)
+			push(s)
+		}
+		return true
+	default:
+		return false
 	}
 }
 func printf(p wg.Printf) {
@@ -515,19 +600,28 @@ func commons(v []string) {
 		fmt.Fprintf(w, "COMMON /%s/ %s\n", s, s)
 	}
 }
+func atoi(s string) int {
+	i, e := strconv.Atoi(s)
+	if e != nil {
+		panic("expected integer: " + s)
+	}
+	return i
+}
 
 /*
 const fhead = `PROGRAM MAIN
 IMPLICIT NONE
 CHARACTER ABCDEFG
-INTEGER*1 INT08(8291)
-INTEGER*4 INT32(4096)
-INTEGER*8 INT64(1024)
-REAL*8    FLOAT(1024)
-EQUIVALENCE(INT08,INT32,INT64,FLOAT)
 `
 */
 
 const fhead = `PROGRAM MAIN
 IMPLICIT NONE
+`
+const mem = `INTEGER*1 I8(8292)
+INTEGER*4 I32(4096)
+INTEGER*8 I64(1024)
+REAL*8    F64(1024)
+COMMON /MEM/I8
+EQUIVALENCE(I8,I32,I64,F64)
 `
