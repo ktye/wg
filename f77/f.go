@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,19 +24,21 @@ var _loc map[string]string
 var loc_ map[string]string
 var bop_ map[wg.Op]string
 var mop_ map[wg.Op]string
+var cmp_ map[string]string
 var fun map[string]wg.Func
 var typ map[string]wg.Type // name77
 var GLO map[string]wg.Type // name77 (all globals)
 var glo map[string]bool    // name77 (within a function)
 var CUR wg.Func            // current function
 var heap bool              // func uses heap
+var lab map[string]int     // label counter
 var stk []string
 var glb []byte // global declarations
 var w io.Writer
 
 func init() {
 	reserved = make(map[string]bool)
-	for _, s := range strings.Split("MAIN COMMON WRITE FUNCTION SUBROUTINE INT REAL", " ") {
+	for _, s := range strings.Split("MAIN COMMON WRITE FUNCTION SUBROUTINE INT REAL IB", " ") {
 		reserved[s] = true
 	}
 	t77_ = map[wg.Type]string{
@@ -45,12 +48,24 @@ func init() {
 		wg.U64: "INTEGER*8",
 		wg.F64: "REAL*8",
 	}
-	bop_ = map[wg.Op]string{
-		{"+", wg.I32}: "+",
+	bop_ = map[wg.Op]string{}
+	for _, c := range []string{"+.", "-.", "*.", "/."} {
+		s := strings.TrimSuffix(c, ".")
+		for _, t := range []wg.Type{wg.I32, wg.U32, wg.I64, wg.I64} {
+			bop_[wg.Op{s, t}] = s
+		}
+		if strings.HasSuffix(c, ".") {
+			bop_[wg.Op{s, wg.F64}] = s
+		}
 	}
-	mop_ = map[wg.Op]string{
-		{"-", wg.I32}: "-",
-		{"-", wg.F64}: "-",
+	cmp_ = map[string]string{}
+	o := strings.Split("LT.LE.GT.GE.EQ.NE.AND", ".")
+	for i, v := range strings.Split("< <= > >= == != &&", " ") {
+		cmp_[v] = o[i]
+	}
+	mop_ = map[wg.Op]string{}
+	for _, t := range []wg.Type{wg.I32, wg.U32, wg.I64, wg.I64} {
+		mop_[wg.Op{"-", t}] = "-"
 	}
 }
 
@@ -104,8 +119,9 @@ func F(out io.Writer, m wg.Module) {
 		fun[f.Name] = f
 	}
 	for i := range m.Funcs {
-		f77Func(m, i)
+		fn(m, i)
 	}
+	w.Write([]byte(builtins))
 	out.Write(indent77(buf.Bytes()))
 }
 func t77(t wg.Type) string {
@@ -116,15 +132,18 @@ func t77(t wg.Type) string {
 	return r
 }
 
-func f77Func(m wg.Module, k int) {
+func fn(m wg.Module, k int) {
 	f := m.Funcs[k]
 	CUR = f
 
-	_ll, ll_, heap_ := _loc, loc_, heap
+	fmt.Fprintf(os.Stderr, "func %s\n", f.Name)
+
+	_ll, ll_, heap_, lab_ := _loc, loc_, heap, lab
 	initLocs(f)
 	heap = false
+	lab = make(map[string]int)
 	defer func() {
-		_loc, loc_, heap = _ll, ll_, heap_
+		_loc, loc_, heap, lab = _ll, ll_, heap_, lab_
 	}()
 
 	v := make([]string, len(f.Args))
@@ -167,8 +186,8 @@ func f77Func(m wg.Module, k int) {
 	for v := range _loc {
 		tt, o := typ[v]
 		if o == false {
-			fmt.Println("loc", _loc)
-			fmt.Println("typ", typ)
+			fmt.Fprintln(os.Stderr, "loc", _loc, loc_)
+			fmt.Fprintln(os.Stderr, "typ", typ)
 			panic(fmt.Sprintf("unknown type for %v", v))
 		}
 		t := t77(tt)
@@ -188,14 +207,15 @@ func f77Func(m wg.Module, k int) {
 			fmt.Fprintf(w, "COMMON /%s/ %s\n", s, s)
 		}
 	}
-
-	io.Copy(w, &buf)
+	w.Write(del(buf.Bytes()))
 	fmt.Fprintf(w, "RETURN\nEND\n")
 }
 func simple(f wg.Func) bool { return len(f.Rets) == 1 && len(f.Args) == 1 }
 
 func emit(x wg.Emitter) {
 	switch v := x.(type) {
+	case wg.Stmts:
+		stmts(v)
 	case wg.Return:
 		retrn(v)
 	case wg.Cast:
@@ -222,6 +242,12 @@ func emit(x wg.Emitter) {
 		assign(v)
 	case wg.Printf:
 		printf(v)
+	case wg.If:
+		iff(v)
+	case wg.For:
+		do(v)
+	case wg.Branch:
+		branch(v)
 	default:
 		panic(fmt.Sprintf("f77-emit not implemented: %T", x))
 	}
@@ -237,6 +263,11 @@ func (f For) f(w io.Writer)          { panic("nyi") }
 func (c CallIndirect) f(w io.Writer) { panic("nyi") }
 */
 
+func stmts(s wg.Stmts) {
+	for _, e := range s {
+		emit(e)
+	}
+}
 func retrn(r wg.Return) {
 	if simple(CUR) {
 		if len(r) != 1 {
@@ -271,6 +302,11 @@ func cast(c wg.Cast) {
 }
 func binary(b wg.Binary) {
 	x, y, s := ev(b.X), ev(b.Y), ssa(b.Op.Type)
+
+	if cop, o := cmp_[b.Op.Name]; o {
+		fmt.Fprintf(w, "%s = IB(%s .%s. %s)\n", s, x, cop, y)
+		return
+	}
 
 	f := ""
 	switch b.Op.Name {
@@ -334,18 +370,31 @@ func litstr(l wg.Literal) string {
 		}
 		return strings.Replace(strconv.FormatFloat(f, 'e', -1, 64), "e", "D", 1)
 	}
-	switch l.Type {
-	case wg.I32: // ssa(wg.I32)
-		return fmt.Sprintf("INT(%s,4)", l.Value)
-	case wg.U64:
-		u, e := strconv.ParseUint(l.Value, 10, 64)
-		if e != nil {
-			panic("cannot parse u64 literal: " + l.Value)
+	holer := func(bits int, s string) string {
+		var u uint64
+		var e error
+		if strings.HasPrefix(s, "-") {
+			var i int64
+			i, e = strconv.ParseInt(s, 10, bits)
+			u = uint64(i)
+		} else {
+			u, e = strconv.ParseUint(s, 10, bits)
 		}
-		i := int64(u)
-		return fmt.Sprintf("INT(%d,8)", i)
-	case wg.I64:
-		return fmt.Sprintf("INT(%s,8)", l.Value)
+		if e != nil {
+			panic("cannot parse int literal: " + s)
+		}
+		return fmt.Sprintf("z'%X'", u)
+	}
+	bits := atoi(l.Type.String()[1:])
+	switch l.Type {
+	case wg.I32, wg.U32, wg.U64, wg.I64:
+		if l.Type == wg.I32 {
+			i := atoi(l.Value)
+			if i < 100 && i > -100 {
+				return fmt.Sprintf("%d", i)
+			}
+		}
+		return fmt.Sprintf("INT(%s,%d)", holer(bits, l.Value), bits/8)
 	case wg.F64:
 		return fmt.Sprintf("REAL(%s,8)", double(l.Value))
 	default:
@@ -353,13 +402,20 @@ func litstr(l wg.Literal) string {
 	}
 }
 func assign(a wg.Assign) {
+	if len(a.Name) > 1 && len(a.Expr) == 1 {
+		multiassign(a)
+		return
+	}
 	for i, s := range a.Name {
 		if len(a.Const) > 0 && a.Const[i] {
 			panic("assign const should not happen") // only in initialization
 		}
-		if a.Mod == ":=" {
-		} else if a.Mod == "=" {
-		} else if a.Mod != "" {
+		mod := ""
+		switch a.Mod {
+		case ":=", "=", "":
+		case "+=", "*=":
+			mod = strings.TrimSuffix(a.Mod, "=")
+		default:
 			panic("modified assign nyi: " + a.Mod)
 		}
 		x := ev(a.Expr[i])
@@ -370,7 +426,29 @@ func assign(a wg.Assign) {
 		} else {
 			s = loc(s)
 		}
-		fmt.Fprintf(w, "%s = %s\n", s, x)
+		if mod == "" {
+			fmt.Fprintf(w, "%s = %s\n", s, x)
+		} else {
+			fmt.Fprintf(w, "%s = %s %s %s\n", s, s, mod, x)
+		}
+	}
+}
+func multiassign(a wg.Assign) {
+	ex := a.Expr[0]
+	_, o := ex.(wg.Call)
+	if o == false {
+		panic(fmt.Sprintf("multiassign expected call: %T\n", ex))
+	}
+	emit(ex)
+	for i := len(a.Name) - 1; i >= 0; i-- {
+		s := a.Name[i]
+		if a.Glob[i] {
+			s = sym(s)
+			glo[s] = true
+		} else {
+			s = loc(s)
+		}
+		fmt.Fprintf(w, "%s = %v\n", s, pop())
 	}
 }
 func call(c wg.Call) {
@@ -418,14 +496,12 @@ func builtinCall(c wg.Call, a []string) bool {
 		div := sz / 8
 		addr := fmt.Sprintf("1+(%s/%d)", a[0], div)
 		{
-
 			s := strings.TrimSuffix(strings.TrimPrefix(a[0], "INT("), ",4)")
 			a, e := strconv.ParseInt(s, 10, 64)
 			a /= int64(div)
 			if e == nil {
 				addr = fmt.Sprintf("%d", 1+a) // instead of "INT(xx,4)/4"
 			}
-
 		}
 		if set {
 			fmt.Fprintf(w, "%c%d(%s) = %s\n", c, sz, addr, a[1])
@@ -447,6 +523,88 @@ func printf(p wg.Printf) {
 	wf += "\n"
 	fmt.Fprintf(w, wf, f)
 }
+func iff(i wg.If) {
+
+	/*
+		b, o := i.If.(wg.Binary)
+		if o == false {
+			panic("if: expected binary")
+		}
+		op, o := cmp_[b.Op.Name]
+		if o == false {
+			panic("if: expected comparison")
+		}
+		x, y := ev(b.X), ev(b.Y)
+	*/
+	x, y, op := binop(i.If)
+
+	fmt.Fprintf(w, "IF(%s .%s. %s)THEN\n", x, op, y)
+	emit(i.Then)
+	if i.Else != nil {
+		fmt.Fprintf(w, "ELSE\n")
+		emit(i.Else)
+	}
+	fmt.Fprintf(w, "ENDIF\n")
+}
+func binop(e wg.Expr) (string, string, string) {
+	b, o := e.(wg.Binary)
+	if o == false {
+		panic("expected binary")
+	}
+	op, o := cmp_[b.Op.Name]
+	if o == false {
+		panic("expected comparison")
+	}
+	x, y := ev(b.X), ev(b.Y)
+	return x, y, op
+}
+func do(f wg.For) {
+	// 10 continue
+	//    if( condition ) then
+	//        body
+	// 11 continue
+	//        post
+	//        goto 10
+	//    end if
+	// 15 continue
+
+	// there is no short (f.Simple) variant
+
+	l := 10 * (1 + len(lab))
+	s := f.Label
+	if s == "" {
+		s = strconv.Itoa(l)
+	}
+	lab[s] = l
+
+	fmt.Fprintf(w, ":%d:CONTINUE\n", l) // : will be stripped by indent()
+	if f.Cond != nil {
+		x, y, op := binop(f.Cond)
+		fmt.Fprintf(w, "IF(%s .%s. %s)THEN\n", x, op, y)
+	}
+	if f.Body != nil {
+		emit(f.Body)
+	}
+	fmt.Fprintf(w, ":%d:CONTINUE\n", l+1) // target for continue
+	if f.Post != nil {
+		emit(f.Post)
+	}
+	if f.Cond != nil {
+		fmt.Fprintf(w, "GOTO %d\nENDIF\n", l)
+	}
+	fmt.Fprintf(w, ":%d:CONTINUE\n", l+5) // target for break
+}
+func branch(b wg.Branch) { // break/continue
+	l := 10 * len(lab)
+	if b.Label != "" {
+		l = lab[b.Label]
+	}
+	if b.Break { // break
+		fmt.Fprintf(w, "GOTO %d\n", l+5)
+	} else { // continue
+		fmt.Fprintf(w, "GOTO %d\n", l+1)
+	}
+}
 
 func pop() string {
 	if len(stk) == 0 {
@@ -458,14 +616,66 @@ func pop() string {
 }
 func push(s string)          { stk = append(stk, s) }
 func ev(e wg.Emitter) string { emit(e); return pop() }
-func indent77(b []byte) (r []byte) {
+func del(b []byte) (r []byte) { // delete unused labels
 	v := bytes.Split(b, []byte{10})
+	m := make(map[int]bool)
 	for i := range v {
-		r = append(r, []byte("      ")...)
-		r = append(r, v[i]...)
-		r = append(r, 10)
+		if bytes.HasPrefix(v[i], []byte("GOTO ")) {
+			s := v[i]
+			m[atoi(string(s[5:]))] = true
+		}
+	}
+	for _, b := range v {
+		s := string(b)
+		if strings.HasPrefix(s, ":") {
+			s = s[1:]
+			p := strings.Index(s, ":")
+			l := atoi(s[:p])
+			if m[l] == false {
+				continue
+			}
+		}
+		if r == nil {
+			r = append(r, b...)
+		} else {
+			r = append(r, byte('\n'))
+			r = append(r, b...)
+		}
 	}
 	return r
+}
+func indent77(b []byte) (r []byte) {
+	v := bytes.Split(b, []byte{10})
+	l := 6
+	for i := range v {
+		s := string(v[i])
+		if anyprefix(s, []string{"THEN", "ENDIF"}) {
+			l--
+		}
+		if len(s) > 0 && s[0] == ':' { // :label:...
+			s = s[1:]
+			p := strings.Index(s, ":")
+			l := atoi(s[:p])
+			v[i] = []byte(fmt.Sprintf("%-6d%s", l, s[1+p:]))
+		} else {
+			r = append(r, bytes.Repeat([]byte(" "), l)...)
+		}
+		r = append(r, v[i]...)
+		r = append(r, 10)
+
+		if anyprefix(s, []string{"IF("}) {
+			l++
+		}
+	}
+	return r
+}
+func anyprefix(s string, v []string) bool {
+	for i := range v {
+		if strings.HasPrefix(s, v[i]) {
+			return true
+		}
+	}
+	return false
 }
 func ssa(t wg.Type) string { // create new ssa variable
 	s := addsym("q", _loc, loc_)
@@ -505,19 +715,23 @@ func initSyms(m wg.Module) {
 func initLocs(f wg.Func) {
 	_loc, loc_ = make(map[string]string), make(map[string]string)
 	for _, l := range f.Args {
-		addsym(l.Name, _loc, loc_)
+		s := addsym(l.Name, _loc, loc_)
+		typ[s] = l.Type
 	}
 	for _, l := range f.Locs {
-		addsym(l.Name, _loc, loc_)
+		s := addsym(l.Name, _loc, loc_)
+		typ[s] = l.Type
 	}
 	if simple(f) == false {
 		for i := range f.Rets {
-			addsym(rname(i), _loc, loc_)
+			s := addsym(rname(i), _loc, loc_)
+			typ[s] = f.Rets[i]
 		}
 	}
 }
 func addsym(s string, _m map[string]string, m_ map[string]string) string {
 	v := strings.ToUpper(s)
+	v = strings.ReplaceAll(v, ".", "")
 	if len(v) > 6 {
 		v = v[:6]
 	}
@@ -624,4 +838,10 @@ INTEGER*8 I64(1024)
 REAL*8    F64(1024)
 COMMON /MEM/I8
 EQUIVALENCE(I8,I32,I64,F64)
+`
+const builtins = `LOGICAL FUNCTION IB(X)
+INTEGER*4 X
+IB = X .NE. 0
+RETURN
+END
 `

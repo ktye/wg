@@ -19,18 +19,13 @@ func main() {
 	//SetI32(8, 0xff0011)
 	//x := negate(float64(Add(1, 2)))
 	//x := negate(Add(1, 2))
-	a := int32(3)
-	x := K(uint64(a)<<uint64(59)) | 456
-	Printf("x,a", x, a)
-
-	t := tp(x)
-	//x := int32(3) + int32(4)
-	Printf("x,t", x, t)
-
+	x := int32(1)
+	y := int32(2)
+	if x > 0 && y > 0 {
+		Printf("x", x)
+	}
 }
-func Add(x, y int32) int32 { return x + y }
-
-func negate(x float64) float64 { return -x }
-func tp(x K) T                 { return T(x >> 59) }
-
-//func negate(x int32) int32 { return -x }
+func f() (r int64) {
+	r = int64(1)
+	return r
+}
