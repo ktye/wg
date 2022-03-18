@@ -8,24 +8,25 @@ import . "github.com/ktye/wg/module"
 // Init sets up the module. The function is not compiled to wasm.
 func init() {
 	Memory(1)
-	//Functions(0, Add)
+	Functions(0, Add, Sub, Neg)
 	//Data(0, "abc")
 }
 
 type K uint64
 type T uint32
+type f1 = func(int32) int32
+type f2 = func(int32, int32) int32
 
 func main() {
-	//SetI32(8, 0xff0011)
-	//x := negate(float64(Add(1, 2)))
-	//x := negate(Add(1, 2))
 	x := int32(1)
 	y := int32(2)
-	if x > 0 && y > 0 {
-		Printf("x", x)
-	}
+	c := int32(0)
+	r := Func[c].(f2)(x, y)
+	Printf("r", r)
 }
-func f() (r int64) {
-	r = int64(1)
-	return r
+func Add(x, y int32) int32 {
+	x = -999
+	return x + y
 }
+func Sub(x, y int32) int32 { return x - y }
+func Neg(x int32) int32    { return -x }

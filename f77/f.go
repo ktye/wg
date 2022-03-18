@@ -25,13 +25,15 @@ var loc_ map[string]string
 var bop_ map[wg.Op]string
 var mop_ map[wg.Op]string
 var cmp_ map[string]string
-var fun map[string]wg.Func
+var ret map[int]string     //name77 return var name
+var fun map[string]wg.Func // fname
 var typ map[string]wg.Type // name77
 var GLO map[string]wg.Type // name77 (all globals)
 var glo map[string]bool    // name77 (within a function)
 var CUR wg.Func            // current function
 var heap bool              // func uses heap
 var lab map[string]int     // label counter
+var tab map[string]string  // sig->name77 (dispatch func)
 var stk []string
 var glb []byte // global declarations
 var w io.Writer
@@ -59,8 +61,8 @@ func init() {
 		}
 	}
 	cmp_ = map[string]string{}
-	o := strings.Split("LT.LE.GT.GE.EQ.NE.AND", ".")
-	for i, v := range strings.Split("< <= > >= == != &&", " ") {
+	o := strings.Split("LT.LE.GT.GE.EQ.NE.AND.OR", ".")
+	for i, v := range strings.Split("< <= > >= == != && ||", " ") {
 		cmp_[v] = o[i]
 	}
 	mop_ = map[wg.Op]string{}
@@ -75,6 +77,7 @@ func F(out io.Writer, m wg.Module) {
 	fun = make(map[string]wg.Func)
 	typ = make(map[string]wg.Type)
 	GLO = make(map[string]wg.Type)
+	tab = make(map[string]string)
 
 	g := make([]string, 0)
 	l := make([]string, 0)
@@ -118,6 +121,7 @@ func F(out io.Writer, m wg.Module) {
 	for _, f := range m.Funcs {
 		fun[f.Name] = f
 	}
+	ftab(m) //indirect function calls
 	for i := range m.Funcs {
 		fn(m, i)
 	}
@@ -138,29 +142,30 @@ func fn(m wg.Module, k int) {
 
 	fmt.Fprintf(os.Stderr, "func %s\n", f.Name)
 
-	_ll, ll_, heap_, lab_ := _loc, loc_, heap, lab
-	initLocs(f)
+	_ll, ll_, heap_, lab_, ret_ := _loc, loc_, heap, lab, ret
 	heap = false
 	lab = make(map[string]int)
+	ret = make(map[int]string)
+	initLocs(f)
 	defer func() {
-		_loc, loc_, heap, lab = _ll, ll_, heap_, lab_
+		_loc, loc_, heap, lab, ret = _ll, ll_, heap_, lab_, ret_
 	}()
 
 	v := make([]string, len(f.Args))
 	for i := 0; i < len(f.Args); i++ {
 		v[i] = loc(f.Args[i].Name)
-		typ[v[i]] = f.Args[i].Type
+		//typ[v[i]] = f.Args[i].Type
 	}
+	//for _, l := range f.Locs {
+	//	s := loc(l.Name)
+	//typ[s] = l.Type
+	//}
 	if simple(f) == false {
 		for i := range f.Rets {
-			r := loc(rname(i))
+			r := loc(ret[i])
 			v = append(v, r)
-			typ[r] = f.Rets[i]
+			//typ[r] = f.Rets[i]
 		}
-	}
-	for _, l := range f.Locs {
-		s := loc(l.Name)
-		typ[s] = l.Type
 	}
 	glo = make(map[string]bool)
 
@@ -236,6 +241,8 @@ func emit(x wg.Emitter) {
 		emit(v.Expr)
 	case wg.Call:
 		call(v)
+	case wg.CallIndirect:
+		calli(v)
 	case wg.Literal:
 		literal(v)
 	case wg.Assign:
@@ -244,6 +251,8 @@ func emit(x wg.Emitter) {
 		printf(v)
 	case wg.If:
 		iff(v)
+	case wg.Switch:
+		swtch(v)
 	case wg.For:
 		do(v)
 	case wg.Branch:
@@ -279,7 +288,7 @@ func retrn(r wg.Return) {
 	}
 	for i, e := range r {
 		emit(e)
-		fmt.Fprintf(w, "%s = %s\n", loc(rname(i)), pop())
+		fmt.Fprintf(w, "%s = %s\n", loc(ret[i]), pop())
 	}
 	fmt.Fprintf(w, "RETURN\n")
 }
@@ -390,7 +399,7 @@ func litstr(l wg.Literal) string {
 	case wg.I32, wg.U32, wg.U64, wg.I64:
 		if l.Type == wg.I32 {
 			i := atoi(l.Value)
-			if i < 100 && i > -100 {
+			if i < 100000 && i > -100000 {
 				return fmt.Sprintf("%d", i)
 			}
 		}
@@ -413,12 +422,15 @@ func assign(a wg.Assign) {
 		mod := ""
 		switch a.Mod {
 		case ":=", "=", "":
-		case "+=", "*=":
+		case "+=", "-=", "*=":
 			mod = strings.TrimSuffix(a.Mod, "=")
 		default:
 			panic("modified assign nyi: " + a.Mod)
 		}
-		x := ev(a.Expr[i])
+		x := "0"
+		if len(a.Expr) > 0 {
+			x = ev(a.Expr[i])
+		}
 
 		if a.Glob[i] {
 			s = sym(s)
@@ -442,6 +454,9 @@ func multiassign(a wg.Assign) {
 	emit(ex)
 	for i := len(a.Name) - 1; i >= 0; i-- {
 		s := a.Name[i]
+		if s == "_" {
+			continue
+		}
 		if a.Glob[i] {
 			s = sym(s)
 			glo[s] = true
@@ -449,6 +464,29 @@ func multiassign(a wg.Assign) {
 			s = loc(s)
 		}
 		fmt.Fprintf(w, "%s = %v\n", s, pop())
+	}
+}
+func calli(c wg.CallIndirect) {
+	sig := sigi(c.ArgType, c.ResType)
+	d, o := tab[sig]
+	if o == false {
+		panic("unknown dispatch func:" + sig)
+	}
+	e := ev(c.Func)
+	simple := len(c.Args) == 1 && len(c.ResType) == 1
+	if simple {
+		x := ev(c.Args[0])
+		push(fmt.Sprintf("%s(%s,%s)", d, x, e))
+	} else {
+		args := make([]string, 0)
+		for _, a := range c.Args {
+			args = append(args, ev(a))
+		}
+		for _, t := range c.ResType {
+			args = append(args, ssa(t))
+		}
+		args = append(args, e)
+		fmt.Fprintf(w, "CALL %s(%s)\n", d, strings.Join(args, ","))
 	}
 }
 func call(c wg.Call) {
@@ -553,10 +591,35 @@ func binop(e wg.Expr) (string, string, string) {
 	}
 	op, o := cmp_[b.Op.Name]
 	if o == false {
-		panic("expected comparison")
+		panic("expected comparison: " + b.Op.Name)
 	}
 	x, y := ev(b.X), ev(b.Y)
 	return x, y, op
+}
+func swtch(s wg.Switch) { // computed goto
+	e := ev(s.E)
+	l := make([]int, len(s.Case))
+	v := make([]string, len(s.Case))
+	for i := range l {
+		l[i] = 10 * (1 + len(lab))
+		v[i] = strconv.Itoa(l[i])
+		lab["switch#"+v[i]] = l[i]
+	}
+	le := 10 * (1 + len(lab))
+	lab["switch#"+strconv.Itoa(le)] = le
+	je := fmt.Sprintf("GOTO %d\n", le)
+
+	fmt.Fprintf(w, "GOTO(%s), 1+%s\n", strings.Join(v, ","), e)
+	if s.Def != nil {
+		emit(s.Def)
+		fmt.Fprint(w, je)
+	}
+	for i := range s.Case {
+		fmt.Fprintf(w, ":%d:CONTINUE\n", l[i])
+		emit(s.Case[i])
+		fmt.Fprint(w, je)
+	}
+	fmt.Fprintf(w, ":%d:CONTINUE\n", le)
 }
 func do(f wg.For) {
 	// 10 continue
@@ -623,6 +686,13 @@ func del(b []byte) (r []byte) { // delete unused labels
 		if bytes.HasPrefix(v[i], []byte("GOTO ")) {
 			s := v[i]
 			m[atoi(string(s[5:]))] = true
+		}
+		if bytes.HasPrefix(v[i], []byte("GOTO(")) {
+			a := bytes.IndexByte(v[i], ')')
+			x := strings.Split(string(v[i][5:a]), ",")
+			for i := range x {
+				m[atoi(x[i])] = true
+			}
 		}
 	}
 	for _, b := range v {
@@ -724,14 +794,29 @@ func initLocs(f wg.Func) {
 	}
 	if simple(f) == false {
 		for i := range f.Rets {
-			s := addsym(rname(i), _loc, loc_)
+			n := newname()
+			s := addsym(n, _loc, loc_)
 			typ[s] = f.Rets[i]
+			ret[i] = n
+		}
+	}
+}
+func newname() string { // new local name not in loc_
+	s := "r"
+	if _, o := loc_[s]; o == false {
+		return s
+	}
+	for i := 0; ; i++ {
+		s = "r" + strconv.Itoa(i)
+		if _, o := loc_[s]; o == false {
+			return s
 		}
 	}
 }
 func addsym(s string, _m map[string]string, m_ map[string]string) string {
 	v := strings.ToUpper(s)
 	v = strings.ReplaceAll(v, ".", "")
+	v = strings.ReplaceAll(v, ":", "")
 	if len(v) > 6 {
 		v = v[:6]
 	}
@@ -756,13 +841,6 @@ func addsym(s string, _m map[string]string, m_ map[string]string) string {
 			return c
 		}
 		i++
-	}
-}
-func rname(i int) string {
-	if i == 0 {
-		return "r"
-	} else {
-		return "r" + strconv.Itoa(i)
 	}
 }
 func declare(d map[string][]string) {
@@ -813,6 +891,130 @@ func commons(v []string) {
 	for _, s := range v {
 		fmt.Fprintf(w, "COMMON /%s/ %s\n", s, s)
 	}
+}
+func sigi(arg, res []wg.Type) (t string) { // indirect function call signature "i:jj"
+	tp := func(t wg.Type) string {
+		switch s := t.String(); s {
+		case "i32":
+			return "i"
+		case "i64":
+			return "j"
+		case "f64":
+			return "f"
+		default:
+			panic("ftab: unknown type:" + s)
+		}
+	}
+	for i := range res {
+		t += tp(res[i])
+	}
+	t += ":"
+	for i := range arg {
+		t += tp(arg[i])
+	}
+	return t
+}
+func sigif(f wg.Func) string {
+	a := make([]wg.Type, 0)
+	for i := range f.Args {
+		a = append(a, f.Args[i].Type)
+	}
+	return sigi(a, f.Rets)
+}
+func ftab(mod wg.Module) { // one dispatch function per signature, each with a jump table
+	max := 0
+	m := make(map[string][]int)
+	n := make(map[string]wg.Func)   // last function with sig
+	itab := make(map[int]string)    // flat table index to f.Name
+	sigt := make(map[string]string) // f.Name -> sig
+	for _, e := range mod.Table {
+		for i, s := range e.Names {
+			fn, o := fun[s]
+			if o == false {
+				panic("ftab: unknown func:" + s)
+			}
+			j := e.Off + i
+			if j > max {
+				max = j
+			}
+			s := sigif(fn)
+			m[s] = append(m[s], j)
+			n[s] = fn
+			itab[j] = fn.Name
+			sigt[fn.Name] = s
+		}
+	}
+	v := make([]string, 0, len(m))
+	for i := range m {
+		v = append(v, i)
+	}
+	sort.Strings(v)
+	for _, u := range v {
+		dispatch(mod, u, m[u], n[u], max, itab, sigt)
+	}
+}
+func dispatch(mod wg.Module, sig string, v []int, f wg.Func, max int, itab map[int]string, sigt map[string]string) { // emit dispatch function for sig
+	fmt.Fprintln(os.Stderr, "dispatch", sig, v)
+	fmt.Fprintln(os.Stderr, "Table", mod.Table)
+	fmt.Fprintln(os.Stderr, "Funcs", mod.Funcs)
+	s := addsym(sig, _sym, sym_)
+	tab[sig] = s
+	fmt.Fprintf(os.Stderr, "f=%+v\n", f)
+	args := "ABCDEFGHIJKLM"
+	args = args[:len(f.Args)]
+	rets := "UVWXYZ"
+	rets = rets[len(rets)-len(f.Rets):]
+	simple := len(f.Rets) == 1 && len(f.Args) == 1
+	var arglist []string
+	if simple {
+		args = "X"
+		rets = ""
+		fmt.Fprintf(w, "%s FUNCTION %s(X,N)\n", t77(f.Rets[0]), s)
+		fmt.Fprintf(w, "%s X\n", t77(f.Args[0].Type))
+		fmt.Fprintf(w, "INTEGER*4 N\n")
+	} else {
+		l := strings.Split(args, "")
+		l = append(l, strings.Split(rets, "")...)
+		l = append(l, "N")
+		arglist = l
+		a := strings.Join(l, ",")
+		fmt.Fprintf(w, "SUBROUTINE %s(%s)\n", s, a)
+		d := make(map[string][]string)
+		for i, s := range args {
+			t := t77(f.Args[i].Type)
+			d[t] = append(d[t], string(s))
+		}
+		for i, s := range rets {
+			t := t77(f.Rets[i])
+			d[t] = append(d[t], string(s))
+		}
+		d["INTEGER*4"] = append(d["INTEGER*4"], "N")
+		declare(d)
+	}
+	a := make([]string, 1+max)
+	for i := range a {
+		a[i] = strconv.Itoa(1 + i)
+	}
+	e := 2 + max
+	fmt.Fprintf(w, "GOTO(%s),1+N\n", strings.Join(a, ","))
+	fmt.Fprintf(w, "GOTO %d\n", e)
+	for i := 0; i <= max; i++ {
+		name, o := itab[i]
+		fmt.Fprintf(w, ":%d:", 1+i)
+
+		if o && sigt[name] == sig {
+			if simple {
+				fmt.Fprintf(w, "%s = %s(X)\nRETURN\n", s, sym(name))
+			} else {
+				a := strings.Join(arglist[:len(arglist)-1], ",")
+				fmt.Fprintf(w, "CALL %s(%s)\nRETURN\n", sym(name), a)
+			}
+		} else {
+			fmt.Fprintf(w, "GOTO %d\n", e)
+		}
+	}
+	fmt.Fprintf(w, ":%d:write(*,*)'DISPATCH FAILED'\n", e)
+	fmt.Fprintf(w, "RETURN\nEND\n")
 }
 func atoi(s string) int {
 	i, e := strconv.Atoi(s)
