@@ -20,8 +20,8 @@ type f1 = func(int32) int32
 type f2 = func(int32, int32) int32
 
 func main() {
-	a, b := float64(3), float64(4)
-	r := hypot(a, b)
-	Printf("r", r)
+	x := -3.2
+	x = absf(x)
+	Printf("x", x)
 }
-func hypot(x, y float64) float64 { return 0 }
+func absf(x float64) float64 { return 0 }

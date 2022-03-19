@@ -41,7 +41,7 @@ var w io.Writer
 
 func init() {
 	reserved = make(map[string]bool)
-	for _, s := range strings.Split("MAIN COMMON WRITE FUNCTION SUBROUTINE INT REAL IB IOR IAND SHIFL SHIFTR SHIFTA LEADZ ALL ANY NOT HYPOT ATAN2 EXP LOG MEMSIZ MEMGRW", " ") {
+	for _, s := range strings.Split("MAIN COMMON WRITE FUNCTION SUBROUTINE INT REAL IB IOR IAND SHIFL SHIFTR SHIFTA LEADZ ALL ANY NOT MOD MIN MAX HYPOT ATAN2 EXP LOG ABS CMPLX MEMSIZ MEMGRW", " ") {
 		reserved[s] = true
 	}
 	t77_ = map[wg.Type]string{
@@ -362,6 +362,8 @@ func binary(b wg.Binary) {
 	case "&^":
 		fmt.Fprintf(w, "%s = IAND(%s,NOT(%s))\n", s, x, y)
 		return
+	case "%":
+		f = "MOD"
 	}
 	if f == "" {
 		fmt.Fprintf(w, "%s = %s %s %s\n", s, x, bop(b.Op), y)
@@ -595,9 +597,8 @@ func builtinCall(c wg.Call, a []string) bool {
 			push(s)
 		}
 		return true
-	case "I8x16load":
-		fmt.Fprintf(w, "%s(:) = I8(1+%s:17+%s)\n", ssa(wg.I8x16), a[0], a[0])
-		heap = true
+	case "I8x16splat", "I32x4splat", "F64x2splat": //eliminate, simd functions are rewritten
+		push(a[0])
 		return true
 	case "Memorysize":
 		push("MEMSIZ()")
@@ -621,8 +622,14 @@ func builtinCall(c wg.Call, a []string) bool {
 	case "I64reinterpret_f64":
 		push("ICASTF(" + a[0] + ")")
 		return true
+	case "F64abs", "F64sqrt":
+		push(strings.ToUpper(s[3:]) + "(" + a[0] + ")")
+		return true
 	case "hypot", "atan2":
 		push(strings.ToUpper(s) + "(" + a[0] + "," + a[1] + ")")
+		return true
+	case "F64min", "F64max":
+		push(strings.ToUpper(s[3:]) + "(" + a[0] + "," + a[1] + ")")
 		return true
 	case "exp", "log":
 		push(strings.ToUpper(s) + "(" + a[0] + ")")
@@ -1117,6 +1124,7 @@ func memsize(s string) string {
 	s = strings.ReplaceAll(s, "#1", strconv.Itoa(n))
 	s = strings.ReplaceAll(s, "#4", strconv.Itoa(n/4))
 	s = strings.ReplaceAll(s, "#8", strconv.Itoa(n/8))
+	s = strings.ReplaceAll(s, "#z", strconv.Itoa(n/16))
 	return s
 }
 
