@@ -41,7 +41,7 @@ var w io.Writer
 
 func init() {
 	reserved = make(map[string]bool)
-	for _, s := range strings.Split("MAIN COMMON WRITE FUNCTION SUBROUTINE INT REAL IB IOR IAND SHIFL SHIFTR SHIFTA LEADZ MEMSIZ MEMGRW", " ") {
+	for _, s := range strings.Split("MAIN COMMON WRITE FUNCTION SUBROUTINE INT REAL IB IOR IAND SHIFL SHIFTR SHIFTA LEADZ ALL ANY NOT HYPOT ATAN2 EXP LOG MEMSIZ MEMGRW", " ") {
 		reserved[s] = true
 	}
 	t77_ = map[wg.Type]string{
@@ -57,7 +57,7 @@ func init() {
 	bop_ = map[wg.Op]string{}
 	for _, c := range []string{"+.", "-.", "*.", "/."} {
 		s := strings.TrimSuffix(c, ".")
-		for _, t := range []wg.Type{wg.I32, wg.U32, wg.I64, wg.I64} {
+		for _, t := range []wg.Type{wg.I32, wg.U32, wg.I64, wg.U64} {
 			bop_[wg.Op{s, t}] = s
 		}
 		if strings.HasSuffix(c, ".") {
@@ -70,7 +70,7 @@ func init() {
 		cmp_[v] = o[i]
 	}
 	mop_ = map[wg.Op]string{}
-	for _, t := range []wg.Type{wg.I32, wg.U32, wg.I64, wg.I64} {
+	for _, t := range []wg.Type{wg.I32, wg.U32, wg.I64, wg.I64, wg.F64} {
 		mop_[wg.Op{"-", t}] = "-"
 	}
 }
@@ -147,6 +147,9 @@ func fn(m wg.Module, k int) {
 	fmt.Fprintf(os.Stderr, "func %s\n", f.Name)
 	if r, o := replace[f.Name]; o {
 		w.Write([]byte(strings.ReplaceAll(memsize(r), "?", sym(f.Name))))
+		return
+	}
+	if _, o := repmat[f.Name]; o {
 		return
 	}
 
@@ -235,7 +238,12 @@ func fn(m wg.Module, k int) {
 	w.Write(del(buf.Bytes()))
 	fmt.Fprintf(w, "RETURN\nEND\n")
 }
-func simple(f wg.Func) bool { return len(f.Rets) == 1 && len(f.Args) == 1 }
+func simple(f wg.Func) bool {
+	if s, o := replace[f.Name]; o && strings.HasPrefix(s, "SUBROUTINE") == false {
+		return true
+	}
+	return len(f.Rets) == 1 && len(f.Args) == 1
+}
 
 func emit(x wg.Emitter) {
 	switch v := x.(type) {
@@ -411,6 +419,8 @@ func litstr(l wg.Literal) string {
 			var i int64
 			i, e = strconv.ParseInt(s, 10, bits)
 			u = uint64(i)
+		} else if strings.HasPrefix(s, "0x") {
+			u, e = strconv.ParseUint(s[2:], 16, bits)
 		} else {
 			u, e = strconv.ParseUint(s, 10, bits)
 		}
@@ -421,7 +431,7 @@ func litstr(l wg.Literal) string {
 	}
 	bits := atoi(l.Type.String()[1:])
 	switch l.Type {
-	case wg.I32, wg.U32, wg.U64, wg.I64:
+	case wg.I32, wg.U32, wg.I64, wg.U64:
 		if l.Type == wg.I32 {
 			i := atoi(l.Value)
 			if i < 100000 && i > -100000 {
@@ -447,7 +457,7 @@ func assign(a wg.Assign) {
 		mod := ""
 		switch a.Mod {
 		case ":=", "=", "":
-		case "+=", "-=", "*=":
+		case "+=", "-=", "*=", ">>=":
 			mod = strings.TrimSuffix(a.Mod, "=")
 		default:
 			panic("modified assign nyi: " + a.Mod)
@@ -540,13 +550,13 @@ func call(c wg.Call) {
 		name := sym(c.Func)
 		_loc[name] = "*function call*"
 		typ[name] = f.Rets[0]
-		push(name + "(" + args[0] + ")")
+		push(name + "(" + strings.Join(args, ",") + ")")
 	}
 }
 func builtinCall(c wg.Call, a []string) bool {
 	s := c.Func
 	switch s {
-	case "I8", "SetI8", "I32", "SetI32", "I64", "U64", "SetU64", "SetI64", "F64", "SetF64":
+	case "I8", "U8", "SetI8", "I32", "U32", "SetI32", "I64", "U64", "SetI64", "F64", "SetF64":
 		heap = true
 		set := false
 		if strings.HasPrefix(s, "Set") {
@@ -604,6 +614,21 @@ func builtinCall(c wg.Call, a []string) bool {
 	case "Memorycopy":
 		fmt.Fprintf(w, "I8(1+%s:1+%s+%s) = I8(1+%s:1+%s+%s)\n", a[0], a[0], a[2], a[1], a[1], a[2])
 		heap = true
+		return true
+	case "F64reinterpret_i64":
+		push("FCASTI(" + a[0] + ")")
+		return true
+	case "I64reinterpret_f64":
+		push("ICASTF(" + a[0] + ")")
+		return true
+	case "hypot", "atan2":
+		push(strings.ToUpper(s) + "(" + a[0] + "," + a[1] + ")")
+		return true
+	case "exp", "log":
+		push(strings.ToUpper(s) + "(" + a[0] + ")")
+		return true
+	case "pow", "ipow":
+		push("(" + a[0] + "**" + a[1] + ")")
 		return true
 	case "panic":
 		fmt.Fprintf(w, "write(*,*)'trap',%s\nCALL EXIT(1)\n", a[0])
@@ -1076,6 +1101,11 @@ func dispatch(mod wg.Module, sig string, v []int, f wg.Func, max int, itab map[i
 }
 func atoi(s string) int {
 	i, e := strconv.Atoi(s)
+	if e != nil && strings.HasPrefix(s, "0x") {
+		var i64 int64
+		i64, e = strconv.ParseInt(s[2:], 16, 32)
+		i = int(i64)
+	}
 	if e != nil {
 		panic("expected integer: " + s)
 	}
@@ -1087,7 +1117,6 @@ func memsize(s string) string {
 	s = strings.ReplaceAll(s, "#1", strconv.Itoa(n))
 	s = strings.ReplaceAll(s, "#4", strconv.Itoa(n/4))
 	s = strings.ReplaceAll(s, "#8", strconv.Itoa(n/8))
-	println(s)
 	return s
 }
 
@@ -1104,6 +1133,22 @@ EQUIVALENCE(I8,I32,I64,F64)
 const builtins = `LOGICAL FUNCTION IB(X)
 INTEGER*4 X
 IB = X .NE. 0
+RETURN
+END
+REAL*8 FUNCTION FCASTI(X)
+INTEGER*8 X, Y
+REAL*8    F
+EQUIVALENCE(Y,F)
+Y = X
+FCASTI = F
+RETURN
+END
+INTEGER*8 FUNCTION ICASTF(X)
+INTEGER*8 R
+REAL*8    X, Y
+EQUIVALENCE(Y,R)
+Y = X
+ICASTF = R
 RETURN
 END
 `
