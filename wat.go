@@ -11,10 +11,20 @@ import (
 // convert wg ast to webassembly text format
 
 func (m Module) Wat(w io.Writer) {
-	fmt.Fprintf(w, "(module\n")
-	for _, i := range m.Imports {
-		i.wat(w)
-	}
+	fmt.Fprintf(w, `(module
+(import "env" "Exit"  (func $Exit  (param i32)))
+(import "env" "Args"  (func $Args  (result i32)))
+(import "env" "Arg"   (func $Arg   (param i32) (param i32) (result i32)))
+(import "env" "Read"  (func $Read  (param i32) (param i32) (param i32) (result i32)))
+(import "env" "Write" (func $Write (param i32) (param i32) (param i32) (param i32) (result i32)))
+(import "env" "ReadIn" (func $ReadIn (param i32) (param i32) (result i32)))
+`)
+
+	/*
+		for _, i := range m.Imports {
+			i.wat(w)
+		}
+	*/
 	if TryCatch {
 		// fmt.Fprintln(w, "(tag $panic)") // proposal
 		fmt.Fprintln(w, "(exception_type $panic)") // wavm

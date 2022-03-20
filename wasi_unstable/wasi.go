@@ -1,5 +1,6 @@
 package wasi_unstable
 
+/*
 import (
 	"fmt"
 	"io"
@@ -161,3 +162,4 @@ func getargs() (r []byte, n int32) {
 func init() {
 	files = make(map[int32]openfile)
 }
+*/
