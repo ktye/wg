@@ -258,13 +258,6 @@ func (a Assign) c(w io.Writer) {
 	}
 	if len(a.Expr) == 0 { // "var t" assigns 0
 		return
-		/*
-			for _, tp := range a.Typs {
-				t := ctype(tp)
-				fmt.Fprintf(w, "%s=(%s)0;\n", c1n(tp), t)
-				c = append(c, c1())
-			}
-		*/
 	}
 	mod := a.Mod
 	if mod == ":=" || mod == "" {
@@ -338,7 +331,7 @@ func (b Binary) c(w io.Writer) {
 }
 func (l Literal) c(w io.Writer) {
 	t, v := c1n(l.Type), l.Value
-	if l.Type == I64 && v == "-9223372036854775808" {
+	if l.Type == I64 && v == "-9223372036854775808" { // -123 is (-)123(signed): -huge overflows.
 		v = "(int64_t)9223372036854775808ULL" // prevent error "integer constant is so large that it is unsigned"
 	}
 	fmt.Fprintf(w, "%s=%s;\n", t, v)
@@ -529,22 +522,17 @@ func (c Call) c(w io.Writer) {
 		fmt.Fprintf(w, "%s=_memorysize;\n", c1n("int32_t"))
 	case "Memorysize2":
 		fmt.Fprintf(w, "%s=_memorysize2;\n", c1n("int32_t"))
-	case "wasi_unstable.proc_exit":
+	case "Exit":
 		c.Args[0].c(w)
 		fmt.Fprintf(w, "exit(%s);\n", c1())
-	case "wasi_unstable.clock_time_get":
-		x, y := args2()
-		c.Args[2].c(w)
-		z := c1()
-		fmt.Fprintf(w, "%s=wasi_clock_time_get(%s,%s,%s);\n", c1n("uint64_t"), x, y, z)
-	case "wasi_unstable.fd_read", "wasi_unstable.fd_write", "wasi_unstable.args_sizes_get", "wasi_unstable.args_get", "wasi_unstable.path_open", "wasi_unstable.fd_seek", "wasi_unstable.fd_close":
-		f := c.Func[14:]
+	case "Args", "Arg", "Read", "Write", "ReadIn":
+		f := c.Func
 		var a []string
 		for i := range c.Args {
 			c.Args[i].c(w)
 			a = append(a, c1())
 		}
-		fmt.Fprintf(w, "%s=wasi_%s(%s);", c1n("int32_t"), f, strings.Join(a, ","))
+		fmt.Fprintf(w, "%s=%s(%s);", c1n("int32_t"), f, strings.Join(a, ","))
 	default:
 		// nyi: "I64clz", "I32ctz", "I64ctz", "I32popcnt", "I64popcnt", "F64abs", "F64sqrt", "F64ceil", "F64floor", "F64nearest", "F64min", "F64max", "F64copysign", "I64reinterpret_f64", "F64reinterpret_i64", "I32reinterpret_f32", "F32reinterpret_i32"
 		call(prefix(c.Func))
@@ -781,70 +769,50 @@ void f64x2pmax(f64x2 *r, f64x2 x, f64x2 y){
  (*r)[ 0]=(x[ 0]>y[ 0])?x[ 0]:y[ 0];
  (*r)[ 1]=(x[ 1]>y[ 1])?x[ 1]:y[ 1];
 }
-uint64_t wasi_clock_time_get(int32_t id, int32_t prec, int32_t res){
- struct timespec t;
- clock_gettime((clockid_t)id, &t);
- return (uint64_t)(1000000000L)*(uint64_t)(t.tv_sec) + (uint64_t)t.tv_nsec;
+int32_t Args(){ return args_; }
+int32_t Arg(int32_t i, int32_t r){
+ if(i>=args_) return 0;
+ if(r ==   0) return strlen(argv_[i]);
+ memcpy(_M+r,argv_[i],strlen(argv_[i]));
+ return 0;
 }
-int32_t getline_(char *p, int n){
- char *r = fgets(p, n, stdin);
+int32_t Read(int32_t file, int32_t nfile, int32_t dst){
+ static char *filebuf = NULL;
+ static size_t      n = 0;
+ if(dst != 0){ memcpy(_M+dst,filebuf,n); return 0; }
+ char name[512];
+ if(nfile > 511) return -1;
+ memcpy(name, _M+file, nfile);
+ name[nfile] = (char)0;
+ FILE *fp = fopen(name, "rb");
+ if(fp==NULL) return -1;
+ 
+ fseek(fp, 0, SEEK_END);
+ n = ftell(fp);
+ fseek(fp, 0, SEEK_SET);
+ if(filebuf != NULL) free(filebuf);
+ filebuf = malloc(n);
+ if(n != fread(filebuf, 1, n, fp)){ fclose(fp); return -1; }
+ fclose(fp);
+ return n;
+}
+int32_t Write(int32_t file, int32_t nfile, int32_t src, int32_t n){
+ if(nfile == 0){ fwrite(_M+src, 1, n, stdout); return 0; }
+ char name[512];
+ memcpy(name, _M+file, nfile);
+ name[nfile] = (char)0;
+ FILE *fp = fopen(name, "rb");
+ if(fp == NULL){ return -1; }
+ fwrite(_M+src, 1, n, fp);
+ fclose(fp);
+ return 0;
+}
+int32_t ReadIn(int32_t dst, int32_t n){
+ char *r = fgets(_M+dst, n, stdin);
  if(r==NULL){ //todo eof
-  return -1;
- }else return (int32_t)strnlen(p,n);
+  return 0;
+ }else return (int32_t)strnlen(_M+dst,n);
 }
-int32_t wasi_fd_read(int32_t fd, int32_t p, int32_t nio, int32_t wa){
- FILE  *fp=stdin;
- int32_t w;
- int32_t a=*((int32_t*)(_M+p));
- int32_t n=*((int32_t*)(_M+p+4));
- if(fd!=0){
-  fp=_fd_;
-  w=(int32_t)fread(_M+a, 1, (size_t)n, fp);
- }else  w=getline_(_M+a, (int)n);
- *((int32_t*)(_M+wa))=w;
- return w<0;
-}
-int32_t wasi_fd_write(int32_t fd, int32_t p, int32_t nio, int32_t wa){
- FILE  *fp=stdout;
- int32_t a=*((int32_t*)(_M+p));
- int32_t n=*((int32_t*)(_M+p+4));
- if(fd!=1)fp=_fd_;
- if(fd==2)fp=stderr;
- int32_t w=(int32_t)fwrite(_M+a, 1, (size_t)n, fp);
- if(fd==1)fflush(stdout);
- *((int32_t*)(_M+wa))=w;
- return w<0;
-}
-int32_t wasi_args_sizes_get(int32_t np, int32_t sp){
- int32_t n=0;
- for(int i=0;i<args_;i++)n+=1+(int32_t)strlen(argv_[i]);
- *((int32_t*)(_M+np))=(int32_t)args_;
- *((int32_t*)(_M+sp))=n;
-}
-int32_t wasi_args_get(int32_t p, int32_t sp){
- char *o=_M+sp;
- for(int i=0;i<args_;i++){
-  size_t n=strlen(argv_[i]);
-  memcpy(o,argv_[i],1+n);
-  o+=1+n;
- }
- return 0;
-}
-int32_t wasi_path_open(int32_t fd, int32_t dirflags, int32_t path, int32_t pathlen, int32_t oflags, int64_t baserights, int64_t inheritrights, int32_t fdflags, int32_t newfp){
- char *name=malloc(1+pathlen);
- memcpy(name,_M+path,1+pathlen);
- name[pathlen]=0;
- if(oflags==0) _fd_=fopen(name,"rb"); //assume read
- else          _fd_=fopen(name,"wb"); //assume write
- free(name);
- return 0;
-}
-int32_t wasi_fd_seek(int32_t fp, int64_t offset, int32_t whence, int32_t rp){
- (int32_t)fseek(_fd_, (long int)offset, (int)whence);
- *((int32_t*)(_M+rp))=(int32_t)ftell(_fd_);
- return 0;
-}
-int32_t wasi_fd_close(int32_t fp){ fclose(_fd_); return 0; }
 void panic() { longjmp(_jb_,1); }
 `
 
