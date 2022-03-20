@@ -41,7 +41,7 @@ var w io.Writer
 
 func init() {
 	reserved = make(map[string]bool)
-	for _, s := range strings.Split("MAIN COMMON WRITE FUNCTION SUBROUTINE INT REAL IB IOR IAND SHIFL SHIFTR SHIFTA LEADZ ALL ANY NOT MOD MIN MAX HYPOT ATAN2 EXP LOG ABS CMPLX MEMSIZ MEMGRW", " ") {
+	for _, s := range strings.Split("I8 I32 I64 F64 MAIN COMMON WRITE FUNCTION SUBROUTINE INT REAL IB IOR IAND SHIFL SHIFTR SHIFTA LEADZ ALL ANY NOT MOD MIN MAX HYPOT ATAN2 EXP LOG ABS CMPLX MEMSIZ MEMGRW ARGSX ARGX WRITEX READX READIN", " ") {
 		reserved[s] = true
 	}
 	t77_ = map[wg.Type]string{
@@ -618,17 +618,11 @@ func builtinCall(c wg.Call, a []string) bool {
 		}
 		return true
 	case "I8x16splat", "I32x4splat", "F64x2splat": //eliminate, simd functions are rewritten
-		p(a[0])
+		p(a[0]) // pass scalar value
 	case "Memorysize":
 		p("MEMSIZ()")
 	case "Memorygrow":
 		p("MEMGRW(" + a[0] + ")")
-	case "I32clz":
-		p("LEADZ(" + a[0] + ")")
-	case "I64popcnt":
-		p("POPCNT(" + a[0] + ")")
-	case "I32B":
-		p(fmt.Sprintf("IB(%s)", a[0]))
 	case "Memorycopy":
 		fmt.Fprintf(w, "I8(1+%s:%s+%s) = I8(1+%s:%s+%s)\n", a[0], a[0], a[2], a[1], a[1], a[2])
 		heap = true
@@ -637,6 +631,12 @@ func builtinCall(c wg.Call, a []string) bool {
 		fmt.Fprintf(w, "I8(1+%s:%s+%s) = INT(%s,1)\n", a[0], a[0], a[2], a[1])
 		heap = true
 		return true
+	case "I32clz":
+		p("LEADZ(" + a[0] + ")")
+	case "I64popcnt":
+		p("POPCNT(" + a[0] + ")")
+	case "I32B":
+		p(fmt.Sprintf("IB(%s)", a[0]))
 	case "F64reinterpret_i64":
 		p("FCASTI(" + a[0] + ")")
 	case "I64reinterpret_f64":
@@ -653,6 +653,16 @@ func builtinCall(c wg.Call, a []string) bool {
 		p(strings.ToUpper(s) + "(" + a[0] + ")")
 	case "pow", "ipow":
 		p("(" + a[0] + "**" + a[1] + ")")
+	case "Exit":
+		fmt.Fprintf(w, "CALL EXIT("+a[0]+")")
+		return true
+	case "Args", "Arg", "Read", "ReadIn", "Write":
+		s := strings.ToUpper(s) + s
+		if len(s) > 6 {
+			s = s[:6]
+		}
+		fmt.Fprintf(w, "%s(%s)\n", s, strings.Join(a, ","))
+		return true
 	case "panic":
 		fmt.Fprintf(w, "write(*,*)'trap',%s\nCALL EXIT(1)\n", a[0])
 		return true
@@ -829,7 +839,7 @@ func indent77(b []byte) (r []byte) {
 	l := 6
 	for i := range v {
 		s := string(v[i])
-		if anyprefix(s, []string{"THEN", "ENDIF"}) {
+		if strings.HasPrefix(s, "ENDIF") {
 			l--
 		}
 		if len(s) > 0 && s[0] == ':' { // :label:...
@@ -838,24 +848,33 @@ func indent77(b []byte) (r []byte) {
 			l := atoi(s[:p])
 			v[i] = []byte(fmt.Sprintf("%-6d%s", l, s[1+p:]))
 		} else {
-			r = append(r, bytes.Repeat([]byte(" "), l)...)
+			v[i] = append(bytes.Repeat([]byte(" "), l), v[i]...)
 		}
-		r = append(r, v[i]...)
+		r = append(r, wrap77(v[i])...)
 		r = append(r, 10)
 
-		if anyprefix(s, []string{"IF("}) {
+		if strings.HasPrefix(s, "IF") && strings.HasSuffix(s, "THEN") {
 			l++
 		}
 	}
 	return r
 }
-func anyprefix(s string, v []string) bool {
-	for i := range v {
-		if strings.HasPrefix(s, v[i]) {
-			return true
-		}
+func wrap77(s []byte) (r []byte) {
+	if len(s) <= 72 {
+		return s
 	}
-	return false
+	r = append(r, s[:72]...)
+	s = s[72:]
+	for {
+		r = append(r, []byte("\n     +")...)
+		if len(s) <= 66 {
+			r = append(r, s...)
+			return r
+		}
+		r = append(r, s[:66]...)
+		s = s[66:]
+	}
+	return r
 }
 func ssa(t wg.Type) string { // create new ssa variable
 	s := addsym("q", _loc, loc_)
