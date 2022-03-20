@@ -146,7 +146,9 @@ func fn(m wg.Module, k int) {
 
 	fmt.Fprintf(os.Stderr, "func %s\n", f.Name)
 	if r, o := replace[f.Name]; o {
-		w.Write([]byte(strings.ReplaceAll(memsize(r), "?", sym(f.Name))))
+		r = strings.ReplaceAll(memsize(r), "?", sym(f.Name))
+		r = strings.ReplaceAll(r, "@", "\n") + "\nRETURN\nEND\n"
+		w.Write([]byte(r))
 		return
 	}
 	if _, o := repmat[f.Name]; o {
@@ -285,6 +287,7 @@ func emit(x wg.Emitter) {
 		do(v)
 	case wg.Branch:
 		branch(v)
+	case wg.Nop:
 	default:
 		panic(fmt.Sprintf("f77-emit not implemented: %T", x))
 	}
@@ -364,6 +367,8 @@ func binary(b wg.Binary) {
 		return
 	case "%":
 		f = "MOD"
+	case "^":
+		f = "NOT"
 	}
 	if f == "" {
 		fmt.Fprintf(w, "%s = %s %s %s\n", s, x, bop(b.Op), y)
@@ -437,7 +442,11 @@ func litstr(l wg.Literal) string {
 		if l.Type == wg.I32 {
 			i := atoi(l.Value)
 			if i < 100000 && i > -100000 {
-				return fmt.Sprintf("%d", i)
+				if i < 0 {
+					return fmt.Sprintf("(%d)", i)
+				} else {
+					return fmt.Sprintf("%d", i)
+				}
 			}
 		}
 		return fmt.Sprintf("INT(%s,%d)", holer(bits, l.Value), bits/8)
@@ -457,9 +466,13 @@ func assign(a wg.Assign) {
 			panic("assign const should not happen") // only in initialization
 		}
 		mod := ""
+		m := map[string]string{
+			"|": "OR",
+			"^": "NOT",
+		}
 		switch a.Mod {
 		case ":=", "=", "":
-		case "+=", "-=", "*=", ">>=":
+		case "+=", "-=", "*=", "/=", ">>=", "^=", "|=":
 			mod = strings.TrimSuffix(a.Mod, "=")
 		default:
 			panic("modified assign nyi: " + a.Mod)
@@ -483,7 +496,12 @@ func assign(a wg.Assign) {
 		if mod == "" {
 			fmt.Fprintf(w, "%s = %s\n", s, x)
 		} else {
-			fmt.Fprintf(w, "%s = %s %s %s\n", s, s, mod, x)
+			r, o := m[mod]
+			if o {
+				fmt.Fprintf(w, "%s = %s(%s,%s)\n", s, r, s, x)
+			} else {
+				fmt.Fprintf(w, "%s = %s %s %s\n", s, s, mod, x)
+			}
 		}
 	}
 }
@@ -556,6 +574,8 @@ func call(c wg.Call) {
 	}
 }
 func builtinCall(c wg.Call, a []string) bool {
+	t := false
+	p := func(s string) { push(s); t = true }
 	s := c.Func
 	switch s {
 	case "I8", "U8", "SetI8", "I32", "U32", "SetI32", "I64", "U64", "SetI64", "F64", "SetF64":
@@ -598,51 +618,48 @@ func builtinCall(c wg.Call, a []string) bool {
 		}
 		return true
 	case "I8x16splat", "I32x4splat", "F64x2splat": //eliminate, simd functions are rewritten
-		push(a[0])
-		return true
+		p(a[0])
 	case "Memorysize":
-		push("MEMSIZ()")
-		return true
+		p("MEMSIZ()")
 	case "Memorygrow":
-		push(fmt.Sprintf("MEMGRW(%s)", a[0]))
-		return true
+		p("MEMGRW(" + a[0] + ")")
 	case "I32clz":
-		push(fmt.Sprintf("LEADZ(%s)", a[0]))
-		return true
+		p("LEADZ(" + a[0] + ")")
+	case "I64popcnt":
+		p("POPCNT(" + a[0] + ")")
 	case "I32B":
-		push(fmt.Sprintf("IB(%s)", a[0]))
-		return true
+		p(fmt.Sprintf("IB(%s)", a[0]))
 	case "Memorycopy":
-		fmt.Fprintf(w, "I8(1+%s:1+%s+%s) = I8(1+%s:1+%s+%s)\n", a[0], a[0], a[2], a[1], a[1], a[2])
+		fmt.Fprintf(w, "I8(1+%s:%s+%s) = I8(1+%s:%s+%s)\n", a[0], a[0], a[2], a[1], a[1], a[2])
+		heap = true
+		return true
+	case "Memoryfill":
+		fmt.Fprintf(w, "I8(1+%s:%s+%s) = INT(%s,1)\n", a[0], a[0], a[2], a[1])
 		heap = true
 		return true
 	case "F64reinterpret_i64":
-		push("FCASTI(" + a[0] + ")")
-		return true
+		p("FCASTI(" + a[0] + ")")
 	case "I64reinterpret_f64":
-		push("ICASTF(" + a[0] + ")")
-		return true
+		p("ICASTF(" + a[0] + ")")
 	case "F64abs", "F64sqrt":
-		push(strings.ToUpper(s[3:]) + "(" + a[0] + ")")
-		return true
+		p(strings.ToUpper(s[3:]) + "(" + a[0] + ")")
+	case "F64floor":
+		p("REAL(FLOOR(" + a[0] + ",8),8)")
 	case "hypot", "atan2":
-		push(strings.ToUpper(s) + "(" + a[0] + "," + a[1] + ")")
-		return true
+		p(strings.ToUpper(s) + "(" + a[0] + "," + a[1] + ")")
 	case "F64min", "F64max":
-		push(strings.ToUpper(s[3:]) + "(" + a[0] + "," + a[1] + ")")
-		return true
+		p(strings.ToUpper(s[3:]) + "(" + a[0] + "," + a[1] + ")")
 	case "exp", "log":
-		push(strings.ToUpper(s) + "(" + a[0] + ")")
-		return true
+		p(strings.ToUpper(s) + "(" + a[0] + ")")
 	case "pow", "ipow":
-		push("(" + a[0] + "**" + a[1] + ")")
-		return true
+		p("(" + a[0] + "**" + a[1] + ")")
 	case "panic":
 		fmt.Fprintf(w, "write(*,*)'trap',%s\nCALL EXIT(1)\n", a[0])
 		return true
 	default:
 		return false
 	}
+	return t
 }
 func printf(p wg.Printf) {
 	f := strings.TrimPrefix(strings.TrimSuffix(p.Format, `"`), `"`)
@@ -679,6 +696,7 @@ func iff(i wg.If) {
 func binop(e wg.Expr) (string, string, string) {
 	b, o := e.(wg.Binary)
 	if o == false {
+		fmt.Fprintf(os.Stderr, "binop: e=%+v\n", e)
 		panic("expected binary")
 	}
 	op, o := cmp_[b.Op.Name]

@@ -20,8 +20,12 @@ type f1 = func(int32) int32
 type f2 = func(int32, int32) int32
 
 func main() {
-	x := -3.2
-	x = absf(x)
+	for i := int32(0); i < 300; i++ {
+		SetI8(i, 0)
+	}
+	SetI8(5, 0)
+	SetI8(7, 0)
+	x := fwh(0, 10)
 	Printf("x", x)
 }
-func absf(x float64) float64 { return 0 }
+func fwh(a, b int32) int32 { return -1 }
