@@ -5,7 +5,6 @@ package x
 
 import (
 	. "github.com/ktye/wg/module"
-	"github.com/ktye/wg/wasi_unstable"
 )
 
 const pi float64 = 3.141592653589793
@@ -473,10 +472,6 @@ func scopevar(x int32) int32 {
 func memcpy(x int32) {
 	Memorycopy(x, x+10, 5)
 }
-
-// (func $wasicall (result i32)
-// i32.const 0 i64.const 0 i32.const 0 call $wasi_unstable.clock_time_get)
-func wasicall() int32 { return wasi_unstable.Clock_time_get(0, 0, 0) }
 
 // (func $simd (param $x i32) (local $v v128) (local $w v128)
 // local.get $x v128.load local.set $v

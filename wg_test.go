@@ -84,4 +84,3 @@ func TestCquote(t *testing.T) {
 		t.Fatalf("expected %q got %q\n", x, g)
 	}
 }
-
