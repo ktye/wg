@@ -28,6 +28,7 @@ var cmp_ map[string]string
 var ret map[int]string     //name77 return var name
 var fun map[string]wg.Func // fname
 var typ map[string]wg.Type // name77
+var con map[string]string  // constants as literals
 var GLO map[string]wg.Type // name77 (all globals)
 var glo map[string]bool    // name77 (within a function)
 var CUR wg.Func            // current function
@@ -35,13 +36,14 @@ var shad map[string]bool   // arg is overwritten by func
 var heap bool              // func uses heap
 var lab map[string]int     // label counter
 var tab map[string]string  // sig->name77 (dispatch func)
+var rec bool               // current func is recursive
 var stk []string
 var glb []byte // global declarations
 var w io.Writer
 
 func init() {
 	reserved = make(map[string]bool)
-	for _, s := range strings.Split("I8 I32 I64 F64 MAIN COMMON WRITE FUNCTION SUBROUTINE INT REAL IB IOR IAND SHIFL SHIFTR SHIFTA LEADZ ALL ANY NOT MOD MIN MAX HYPOT ATAN2 EXP LOG ABS CMPLX MEMSIZ MEMGRW ARGSX ARGX WRITEX READX READIN", " ") {
+	for _, s := range strings.Split("I8 I32 I64 F64 FNC MAIN COMMON WRITE FUNCTION SUBROUTINE INT REAL LEN IB IOR IAND SHIFL SHIFTR SHIFTA LEADZ ALL ANY NOT MOD MIN MAX HYPOT ATAN2 SIN COS EXP LOG FRACTION EXPONENT ABS CMPLX COMPLEX ISNAN IARGC GETARG MEMSIZ MEMGRW XARGS XARG XWRITE XREAD XREADI", " ") {
 		reserved[s] = true
 	}
 	t77_ = map[wg.Type]string{
@@ -50,9 +52,9 @@ func init() {
 		wg.I64:   "INTEGER*8",
 		wg.U64:   "INTEGER*8",
 		wg.F64:   "REAL*8",
-		wg.I8x16: "INTEGER*1x16",
-		wg.I32x4: "INTEGER*4x4",
-		wg.F64x2: "REAL*8x2",
+		wg.I8x16: "INTEGER*4",
+		wg.I32x4: "INTEGER*4",
+		wg.F64x2: "REAL*8",
 	}
 	bop_ = map[wg.Op]string{}
 	for _, c := range []string{"+.", "-.", "*.", "/."} {
@@ -76,13 +78,19 @@ func init() {
 }
 
 func F(out io.Writer, m wg.Module) {
-	initSyms(m)
 	stk = make([]string, 0)
 	fun = make(map[string]wg.Func)
 	typ = make(map[string]wg.Type)
 	GLO = make(map[string]wg.Type)
+	con = make(map[string]string)
 	tab = make(map[string]string)
+	_sym = make(map[string]string)
+	sym_ = make(map[string]string)
 
+	for _, f := range m.Funcs {
+		s := addsym(f.Name, _sym, sym_)
+		reserved[s] = true // don't reuse function name as local
+	}
 	g := make([]string, 0)
 	l := make([]string, 0)
 	{ // globals
@@ -95,6 +103,10 @@ func F(out io.Writer, m wg.Module) {
 				lit, o := e.(wg.Literal)
 				if o == false {
 					panic(fmt.Sprintf("global declaration is a %T", e))
+				}
+				if a.Const[i] == true {
+					con[a.Name[i]] = litstr(lit)
+					continue
 				}
 				s = addsym(s, _sym, sym_)
 				g = append(g, s)
@@ -116,20 +128,25 @@ func F(out io.Writer, m wg.Module) {
 	w.Write([]byte(memsize(mem)))
 	w.Write(glb)
 
+	for _, f := range m.Funcs {
+		fun[f.Name] = f
+	}
+	fnc, funcs := ftab(m)
+	//fmt.Fprintf(os.Stderr, "FNC: %s\n", string(fnc))
+	w.Write(fnc)
+
 	for i := range g { // global initialization
 		fmt.Fprintf(w, "%s = %s\n", g[i], l[i])
 	}
 
 	fmt.Fprintf(w, "CALL %s\n", sym("main"))
 	fmt.Fprintf(w, "STOP\nEND\n")
-	for _, f := range m.Funcs {
-		fun[f.Name] = f
-	}
-	ftab(m) //indirect function calls
+
+	w.Write(funcs) // dispatch indirect calls
 	for i := range m.Funcs {
 		fn(m, i)
 	}
-	w.Write([]byte(builtins))
+	w.Write([]byte(memsize(builtins)))
 	out.Write(indent77(buf.Bytes()))
 }
 func t77(t wg.Type) string {
@@ -144,8 +161,11 @@ func fn(m wg.Module, k int) {
 	f := m.Funcs[k]
 	CUR = f
 
-	fmt.Fprintf(os.Stderr, "func %s\n", f.Name)
+	//fmt.Fprintf(os.Stderr, "func %s\n", f.Name)
 	if r, o := replace[f.Name]; o {
+		if r == "" {
+			return
+		}
 		r = strings.ReplaceAll(memsize(r), "?", sym(f.Name))
 		r = strings.ReplaceAll(r, "@", "\n") + "\nRETURN\nEND\n"
 		w.Write([]byte(r))
@@ -155,14 +175,15 @@ func fn(m wg.Module, k int) {
 		return
 	}
 
-	_ll, ll_, heap_, lab_, ret_, shad_ := _loc, loc_, heap, lab, ret, shad
+	_ll, ll_, heap_, lab_, ret_, shad_, rec_ := _loc, loc_, heap, lab, ret, shad, rec
 	heap = false
 	lab = make(map[string]int)
 	ret = make(map[int]string)
 	shad = make(map[string]bool)
+	rec = false
 	initLocs(f)
 	defer func() {
-		_loc, loc_, heap, lab, ret, shad = _ll, ll_, heap_, lab_, ret_, shad_
+		_loc, loc_, heap, lab, ret, shad, rec = _ll, ll_, heap_, lab_, ret_, shad_, rec_
 	}()
 
 	v := make([]string, len(f.Args))
@@ -170,17 +191,12 @@ func fn(m wg.Module, k int) {
 		v[i] = loc(f.Args[i].Name)
 		//typ[v[i]] = f.Args[i].Type
 	}
-	//for _, l := range f.Locs {
-	//	s := loc(l.Name)
-	//typ[s] = l.Type
-	//}
-	if simple(f) == false {
-		for i := range f.Rets {
-			r := loc(ret[i])
-			v = append(v, r)
-			//typ[r] = f.Rets[i]
-		}
+	//if simple(f) == false {
+	for i := range f.Rets {
+		r := loc(ret[i])
+		v = append(v, r)
 	}
+	//}
 	glo = make(map[string]bool)
 
 	w_ := w
@@ -199,8 +215,12 @@ func fn(m wg.Module, k int) {
 			v[i] = n
 		}
 	}
+	if rec {
+		fmt.Fprintf(w, "RECURSIVE ")
+	}
 	if simple(f) {
-		fmt.Fprintf(w, "%s FUNCTION %s(%s)\n", t77(f.Rets[0]), sym(f.Name), v[0])
+		fmt.Fprintf(w, "FUNCTION %s(%s)RESULT(%s)\n", sym(f.Name), v[0], v[len(v)-1])
+		//fmt.Fprintf(w, "%s FUNCTION %s(%s)\n", t77(f.Rets[0]), sym(f.Name), v[0])
 	} else {
 		fmt.Fprintf(w, "SUBROUTINE %s(%s)\n", sym(f.Name), strings.Join(v, ","))
 	}
@@ -309,14 +329,16 @@ func stmts(s wg.Stmts) {
 	}
 }
 func retrn(r wg.Return) {
-	if simple(CUR) {
-		if len(r) != 1 {
-			panic("expected 1 return value")
+	/*
+		if simple(CUR) {
+			if len(r) != 1 {
+				panic("expected 1 return value")
+			}
+			emit(r[0])
+			fmt.Fprintf(w, "%s = %s\nRETURN\n", sym(CUR.Name), pop())
+			return
 		}
-		emit(r[0])
-		fmt.Fprintf(w, "%s = %s\nRETURN\n", sym(CUR.Name), pop())
-		return
-	}
+	*/
 	for i, e := range r {
 		emit(e)
 		fmt.Fprintf(w, "%s = %s\n", loc(ret[i]), pop())
@@ -341,9 +363,14 @@ func cast(c wg.Cast) {
 	}
 }
 func binary(b wg.Binary) {
-	x, y, s := ev(b.X), ev(b.Y), ssa(b.Op.Type)
+	x, y := ev(b.X), ev(b.Y)
+	if logical(b, x, y) {
+		return
+	}
 
+	s := ssa(b.Op.Type)
 	if cop, o := cmp_[b.Op.Name]; o {
+		regret("IB", wg.I32)
 		fmt.Fprintf(w, "%s = IB(%s .%s. %s)\n", s, x, cop, y)
 		return
 	}
@@ -351,9 +378,9 @@ func binary(b wg.Binary) {
 	f := ""
 	switch b.Op.Name {
 	case "<<", ">>":
-		f = "SHIFTR"
+		f = "SHIFTA"
 		if b.Op.Type == wg.U32 || b.Op.Type == wg.U64 {
-			f = "SHIFTA"
+			f = "SHIFTR"
 		}
 		if b.Op.Name == "<<" {
 			f = "SHIFTL"
@@ -368,13 +395,20 @@ func binary(b wg.Binary) {
 	case "%":
 		f = "MOD"
 	case "^":
-		f = "NOT"
+		f = "XOR"
 	}
 	if f == "" {
 		fmt.Fprintf(w, "%s = %s %s %s\n", s, x, bop(b.Op), y)
 	} else {
 		fmt.Fprintf(w, "%s = %s(%s, %s)\n", s, f, x, y)
 	}
+}
+func logical(b wg.Binary, x, y string) bool {
+	cop, o := cmp_[b.Op.Name]
+	if o {
+		push(fmt.Sprintf("(%s .%s. %s)", x, cop, y))
+	}
+	return o
 }
 func unary(u wg.Unary) {
 	x := ev(u.X)
@@ -387,6 +421,10 @@ func localgets(l wg.LocalGets) {
 	}
 }
 func globalget(g wg.GlobalGet) {
+	if s, o := con[string(g)]; o {
+		push(s)
+		return
+	}
 	s := sym(string(g))
 	glo[s] = true
 	stk = append(stk, s)
@@ -439,7 +477,7 @@ func litstr(l wg.Literal) string {
 	bits := atoi(l.Type.String()[1:])
 	switch l.Type {
 	case wg.I32, wg.U32, wg.I64, wg.U64:
-		if l.Type == wg.I32 {
+		if l.Type == wg.I32 || l.Type == wg.U32 {
 			i := atoi(l.Value)
 			if i < 100000 && i > -100000 {
 				if i < 0 {
@@ -467,13 +505,19 @@ func assign(a wg.Assign) {
 		}
 		mod := ""
 		m := map[string]string{
-			"|": "OR",
-			"^": "NOT",
+			"|":   "OR",
+			"^":   "XOR",
+			"<<":  "SHIFTL",
+			">>U": "SHIFTR",
+			">>":  "SHIFTA",
 		}
 		switch a.Mod {
 		case ":=", "=", "":
 		case "+=", "-=", "*=", "/=", ">>=", "^=", "|=":
 			mod = strings.TrimSuffix(a.Mod, "=")
+			if mod == ">>" && (a.Typs[i] == wg.I32 || a.Typs[i] == wg.I64) {
+				mod = ">>U"
+			}
 		default:
 			panic("modified assign nyi: " + a.Mod)
 		}
@@ -535,6 +579,7 @@ func calli(c wg.CallIndirect) {
 	e := ev(c.Func)
 	simple := len(c.Args) == 1 && len(c.ResType) == 1
 	if simple {
+		regret(d, c.ResType[0])
 		x := ev(c.Args[0])
 		push(fmt.Sprintf("%s(%s,%s)", d, x, e))
 	} else {
@@ -550,9 +595,11 @@ func calli(c wg.CallIndirect) {
 	}
 }
 func call(c wg.Call) {
-	args := make([]string, 0)
-	for _, a := range c.Args {
-		args = append(args, ev(a))
+	args, ismulti := multiresult(c.Args, c.Func)
+	if ismulti == false {
+		for _, a := range c.Args {
+			args = append(args, ev(a))
+		}
 	}
 
 	if builtinCall(c, args) {
@@ -560,18 +607,44 @@ func call(c wg.Call) {
 	}
 
 	f := fun[c.Func]
+	if CUR.Name == c.Func {
+		rec = true
+	}
 	if simple(f) == false {
 		for _, t := range f.Rets {
 			args = append(args, ssa(t))
 		}
 		fmt.Fprintf(w, "CALL %s(%s)\n", sym(c.Func), strings.Join(args, ","))
 	} else {
-		// the called function must be declared like a local
 		name := sym(c.Func)
-		_loc[name] = "*function call*"
-		typ[name] = f.Rets[0]
+		if c.Func != CUR.Name {
+			regret(name, f.Rets[0]) // the called function must be declared like a local
+		}
 		push(name + "(" + strings.Join(args, ",") + ")")
 	}
+}
+func multiresult(e []wg.Expr, origfunc string) (args []string, ismulti bool) {
+	// single argument is a function call that returns multiple results
+	// e.g. func t() (int, int) {...}   func e(int, int){..}    e(t())
+	args = make([]string, 0)
+	if len(e) != 1 {
+		return args, false
+	}
+	c, o := e[0].(wg.Call)
+	f := fun[c.Func]
+	if o && len(f.Rets) > 1 {
+		emit(e[0])
+		args = make([]string, len(f.Rets))
+		for i := len(f.Rets) - 1; i >= 0; i-- {
+			args[i] = pop()
+		}
+		return args, true
+	}
+	return args, false
+}
+func regret(fname string, t wg.Type) { // register function call as local declaration
+	_loc[fname] = "*function call*"
+	typ[fname] = t
 }
 func builtinCall(c wg.Call, a []string) bool {
 	t := false
@@ -613,15 +686,20 @@ func builtinCall(c wg.Call, a []string) bool {
 			}
 			fmt.Fprintf(w, "%c%d(%s) = %s\n", c, sz, addr, rhs)
 		} else {
-			s := fmt.Sprintf("%c%d(%s)", c, sz, addr)
-			push(s)
+			r := fmt.Sprintf("%c%d(%s)", c, sz, addr)
+			if s == "I8" || s == "U8" {
+				r = "INT(" + r + ",4)"
+			}
+			push(r)
 		}
 		return true
 	case "I8x16splat", "I32x4splat", "F64x2splat": //eliminate, simd functions are rewritten
 		p(a[0]) // pass scalar value
 	case "Memorysize":
+		regret("MEMSIZ", wg.I32)
 		p("MEMSIZ()")
 	case "Memorygrow":
+		regret("MEMGRW", wg.I32)
 		p("MEMGRW(" + a[0] + ")")
 	case "Memorycopy":
 		fmt.Fprintf(w, "I8(1+%s:%s+%s) = I8(1+%s:%s+%s)\n", a[0], a[0], a[2], a[1], a[1], a[2])
@@ -635,11 +713,16 @@ func builtinCall(c wg.Call, a []string) bool {
 		p("LEADZ(" + a[0] + ")")
 	case "I64popcnt":
 		p("POPCNT(" + a[0] + ")")
+	case "isnan":
+		p("ISNAN(" + a[0] + ")")
 	case "I32B":
+		regret("IB", wg.I32)
 		p(fmt.Sprintf("IB(%s)", a[0]))
 	case "F64reinterpret_i64":
+		regret("FCASTI", wg.F64)
 		p("FCASTI(" + a[0] + ")")
 	case "I64reinterpret_f64":
+		regret("ICASTF", wg.I64)
 		p("ICASTF(" + a[0] + ")")
 	case "F64abs", "F64sqrt":
 		p(strings.ToUpper(s[3:]) + "(" + a[0] + ")")
@@ -653,15 +736,22 @@ func builtinCall(c wg.Call, a []string) bool {
 		p(strings.ToUpper(s) + "(" + a[0] + ")")
 	case "pow", "ipow":
 		p("(" + a[0] + "**" + a[1] + ")")
-	case "Exit":
-		fmt.Fprintf(w, "CALL EXIT("+a[0]+")")
+	case "frexp":
+		fmt.Fprintf(w, "%s = FRACTION(%s)\n", ssa(wg.F64), a[0])
+		fmt.Fprintf(w, "%s = INT(INT(EXPONENT(%s),4),8)\n", ssa(wg.I64), a[0])
 		return true
-	case "Args", "Arg", "Read", "ReadIn", "Write":
-		s := strings.ToUpper(s) + s
+	case "Exit":
+		fmt.Fprintf(w, "CALL EXIT("+a[0]+")\n")
+		return true
+	case "Args":
+		p("IARGC()")
+	case "Arg", "Read", "ReadIn", "Write":
+		s := "X" + strings.ToUpper(s)
 		if len(s) > 6 {
 			s = s[:6]
 		}
-		fmt.Fprintf(w, "%s(%s)\n", s, strings.Join(a, ","))
+		regret(s, wg.I32)
+		fmt.Fprintf(w, "%s = %s(%s)\n", ssa(wg.I32), s, strings.Join(a, ","))
 		return true
 	case "panic":
 		fmt.Fprintf(w, "write(*,*)'trap',%s\nCALL EXIT(1)\n", a[0])
@@ -681,21 +771,13 @@ func printf(p wg.Printf) {
 	fmt.Fprintf(w, wf, f)
 }
 func iff(i wg.If) {
-
-	/*
-		b, o := i.If.(wg.Binary)
-		if o == false {
-			panic("if: expected binary")
-		}
-		op, o := cmp_[b.Op.Name]
-		if o == false {
-			panic("if: expected comparison")
-		}
-		x, y := ev(b.X), ev(b.Y)
-	*/
 	x, y, op := binop(i.If)
 
-	fmt.Fprintf(w, "IF(%s .%s. %s)THEN\n", x, op, y)
+	if strings.HasPrefix(x, "ISNAN(") && op == "EQ" && y == "1" {
+		fmt.Fprintf(w, "IF(%s)THEN\n", x)
+	} else {
+		fmt.Fprintf(w, "IF(%s .%s. %s)THEN\n", x, op, y)
+	}
 	emit(i.Then)
 	if i.Else != nil {
 		fmt.Fprintf(w, "ELSE\n")
@@ -752,6 +834,13 @@ func do(f wg.For) {
 	// 15 continue
 
 	// there is no short (f.Simple) variant
+
+	if f.Simple == true {
+		l := f.Body[len(f.Body)-1]
+		if b, o := l.(wg.Branch); o && b.Break == false {
+			f.Body = f.Body[:len(f.Body)-1] // remove last continue
+		}
+	}
 
 	l := 10 * (1 + len(lab))
 	s := f.Label
@@ -835,6 +924,7 @@ func del(b []byte) (r []byte) { // delete unused labels
 	return r
 }
 func indent77(b []byte) (r []byte) {
+	b = bytes.ReplaceAll(b, []byte("RETURN\nRETURN\n"), []byte("RETURN\n"))
 	v := bytes.Split(b, []byte{10})
 	l := 6
 	for i := range v {
@@ -848,7 +938,9 @@ func indent77(b []byte) (r []byte) {
 			l := atoi(s[:p])
 			v[i] = []byte(fmt.Sprintf("%-6d%s", l, s[1+p:]))
 		} else {
-			v[i] = append(bytes.Repeat([]byte(" "), l), v[i]...)
+			if l > 0 { // l<=0 should not happen
+				v[i] = append(bytes.Repeat([]byte(" "), l), v[i]...)
+			}
 		}
 		r = append(r, wrap77(v[i])...)
 		r = append(r, 10)
@@ -896,20 +988,7 @@ func sym(s string) string { // fortran names for globals and subroutines
 	}
 	return r
 }
-func initSyms(m wg.Module) {
-	// first add all symbols upper(6&#s)#s globals and function names
-	// sym(s) lookup create new names for those that are not unique.
-	_sym, sym_ = make(map[string]string), make(map[string]string)
-	for _, f := range m.Funcs {
-		addsym(f.Name, _sym, sym_)
-	}
-	/*
-		for _, a := range m.Globals {
-			for _, s := range a.Name {
-				addsym(s, _sym, sym_)
-			}
-		}
-	*/
+func initFNC(m wg.Module) { // FNC: array of indirect function index within group (by signature)
 }
 func initLocs(f wg.Func) {
 	_loc, loc_ = make(map[string]string), make(map[string]string)
@@ -921,14 +1000,14 @@ func initLocs(f wg.Func) {
 		s := addsym(l.Name, _loc, loc_)
 		typ[s] = l.Type
 	}
-	if simple(f) == false {
-		for i := range f.Rets {
-			n := newname()
-			s := addsym(n, _loc, loc_)
-			typ[s] = f.Rets[i]
-			ret[i] = n
-		}
+	//if simple(f) == false {
+	for i := range f.Rets {
+		n := newname()
+		s := addsym(n, _loc, loc_)
+		typ[s] = f.Rets[i]
+		ret[i] = n
 	}
+	//}
 }
 func newname() string { // new local name not in loc_
 	s := "r"
@@ -961,7 +1040,7 @@ func addsym(s string, _m map[string]string, m_ map[string]string) string {
 		p := fmt.Sprintf("%X", i)
 		c := v + p
 		if len(c) > 6 {
-			c = s[:6-len(p)] + p
+			c = v[:6-len(p)] + p
 		}
 		if _, o := _m[c]; o == false && reserved[c] == false {
 			//fmt.Println("addsym create", s, c)
@@ -979,44 +1058,23 @@ func declare(d map[string][]string) {
 	}
 	sort.Strings(t)
 	for _, tp := range t {
-		o := tp + " "
 		v := d[tp]
 		sort.Strings(v)
-		for i, s := range v {
-			c := ","
-			if o[len(o)-1] == ' ' {
-				c = ""
-			}
-			if len(o)+len(s) < 65 {
-				o += c + s
-			} else {
-				w.Write([]byte(o + "\n"))
-				o = tp + " " + s
-			}
-			if i == len(v)-1 {
-				w.Write([]byte(o + "\n"))
-			}
-		}
+		fmt.Fprintf(w, "%s %s\n", tp, strings.Join(uniq(v), ","))
 	}
 }
+func uniq(v []string) (r []string) {
+	m := make(map[string]bool)
+	r = make([]string, 0, len(v))
+	for _, s := range v {
+		if m[s] == false {
+			m[s] = true
+			r = append(r, s)
+		}
+	}
+	return r
+}
 func commons(v []string) {
-	/*
-		o := "COMMON "
-		for _, s := range v {
-			if len(o)+len(s) < 65 {
-				if o[len(o)-1] != ' ' {
-					o += ","
-				}
-				o += s
-			} else {
-				fmt.Fprintf(w, "%s\n", o)
-				o = "COMMON " + s
-			}
-		}
-		if o[len(o)-1] != ' ' {
-			fmt.Fprintf(w, "%s\n", o)
-		}
-	*/
 	for _, s := range v {
 		fmt.Fprintf(w, "COMMON /%s/ %s\n", s, s)
 	}
@@ -1052,9 +1110,10 @@ func sigif(f wg.Func) string {
 	}
 	return sigi(a, f.Rets)
 }
-func ftab(mod wg.Module) { // one dispatch function per signature, each with a jump table
+func ftab(mod wg.Module) ([]byte, []byte) { // one dispatch function per signature, each with a jump table
 	max := 0
-	m := make(map[string][]int)
+	m := make(map[string][]int)     // sig->ints
+	g := make(map[int]int)          // func index to group index(by sig)
 	n := make(map[string]wg.Func)   // last function with sig
 	itab := make(map[int]string)    // flat table index to f.Name
 	sigt := make(map[string]string) // f.Name -> sig
@@ -1070,6 +1129,7 @@ func ftab(mod wg.Module) { // one dispatch function per signature, each with a j
 			}
 			s := sigif(fn)
 			m[s] = append(m[s], j)
+			g[j] = len(m[s]) - 1
 			n[s] = fn
 			itab[j] = fn.Name
 			sigt[fn.Name] = s
@@ -1079,12 +1139,39 @@ func ftab(mod wg.Module) { // one dispatch function per signature, each with a j
 	for i := range m {
 		v = append(v, i)
 	}
+
+	var buf bytes.Buffer
+	w_ := w
+	w = &buf
 	sort.Strings(v)
-	for _, u := range v {
-		dispatch(mod, u, m[u], n[u], max, itab, sigt)
+
+	d := fmt.Sprintf("INTEGER*4 FNC(%d)\nCOMMON /FNC/FNC\n", 1+max)
+	{
+		v := make([]string, 1+max)
+		for i := 0; i <= max; i++ {
+			v[i] = "0"
+			if j, o := g[i]; o {
+				v[i] = strconv.Itoa(j)
+			}
+		}
+		d += "FNC = (/" + strings.Join(v, ",") + "/)\n"
 	}
+
+	for _, u := range v {
+		//dispatch(mod, u, m[u], n[u], max, itab, sigt)
+		x := m[u]
+		names := make([]string, len(x))
+		for i := range x {
+			names[i] = itab[x[i]]
+		}
+		dispatch(u, x, names, n[u], max)
+	}
+	w = w_
+	return []byte(d), buf.Bytes()
 }
-func dispatch(mod wg.Module, sig string, v []int, f wg.Func, max int, itab map[int]string, sigt map[string]string) { // emit dispatch function for sig
+
+//func dispatch(mod wg.Module, sig string, v []int, f wg.Func, max int, itab map[int]string, sigt map[string]string) { // emit dispatch function for sig
+func dispatch(sig string, v []int, names []string, f wg.Func, max int) {
 	s := addsym(sig, _sym, sym_)
 	tab[sig] = s
 	args := "ABCDEFGHIJKLM"
@@ -1093,12 +1180,17 @@ func dispatch(mod wg.Module, sig string, v []int, f wg.Func, max int, itab map[i
 	rets = rets[len(rets)-len(f.Rets):]
 	simple := len(f.Rets) == 1 && len(f.Args) == 1
 	var arglist []string
+	d := make(map[string][]string)
 	if simple {
 		args = "X"
 		rets = ""
-		fmt.Fprintf(w, "%s FUNCTION %s(X,N)\n", t77(f.Rets[0]), s)
-		fmt.Fprintf(w, "%s X\n", t77(f.Args[0].Type))
-		fmt.Fprintf(w, "INTEGER*4 N\n")
+		rt := t77(f.Rets[0])
+		fmt.Fprintf(w, "%s FUNCTION %s(X,N)\n", rt, s)
+		t := t77(f.Args[0].Type)
+		d[t] = append(d[t], "X")
+		for i := range names {
+			d[rt] = append(d[rt], sym(names[i]))
+		}
 	} else {
 		l := strings.Split(args, "")
 		l = append(l, strings.Split(rets, "")...)
@@ -1106,7 +1198,6 @@ func dispatch(mod wg.Module, sig string, v []int, f wg.Func, max int, itab map[i
 		arglist = l
 		a := strings.Join(l, ",")
 		fmt.Fprintf(w, "SUBROUTINE %s(%s)\n", s, a)
-		d := make(map[string][]string)
 		for i, s := range args {
 			t := t77(f.Args[i].Type)
 			d[t] = append(d[t], string(s))
@@ -1115,32 +1206,28 @@ func dispatch(mod wg.Module, sig string, v []int, f wg.Func, max int, itab map[i
 			t := t77(f.Rets[i])
 			d[t] = append(d[t], string(s))
 		}
-		d["INTEGER*4"] = append(d["INTEGER*4"], "N")
-		declare(d)
 	}
-	a := make([]string, 1+max)
-	for i := range a {
-		a[i] = strconv.Itoa(1 + i)
+	d["INTEGER*4"] = append(d["INTEGER*4"], "N")
+	declare(d)
+	fmt.Fprintf(w, "INTEGER*4 FNC(%d)\n", 1+max)
+	fmt.Fprintf(w, "COMMON /FNC/FNC\n")
+	jota := make([]string, len(v))
+	for i := range jota {
+		jota[i] = strconv.Itoa(1 + i)
 	}
-	e := 2 + max
-	fmt.Fprintf(w, "GOTO(%s),1+N\n", strings.Join(a, ","))
-	fmt.Fprintf(w, "GOTO %d\n", e)
-	for i := 0; i <= max; i++ {
-		name, o := itab[i]
-		fmt.Fprintf(w, ":%d:", 1+i)
-
-		if o && sigt[name] == sig {
-			if simple {
-				fmt.Fprintf(w, "%s = %s(X)\nRETURN\n", s, sym(name))
-			} else {
-				a := strings.Join(arglist[:len(arglist)-1], ",")
-				fmt.Fprintf(w, "CALL %s(%s)\nRETURN\n", sym(name), a)
-			}
+	fmt.Fprintf(w, "GOTO(%s),FNC(1+N)\n", strings.Join(jota, ","))
+	fmt.Fprintf(w, "write(*,*)'DISPATCH FAILED'\n")
+	var a string
+	if simple == false {
+		a = strings.Join(arglist[:len(arglist)-1], ",")
+	}
+	for i := range v {
+		if simple {
+			fmt.Fprintf(w, ":%d:%s = %s(X)\nRETURN\n", 1+i, s, sym(names[i]))
 		} else {
-			fmt.Fprintf(w, "GOTO %d\n", e)
+			fmt.Fprintf(w, ":%d:CALL %s(%s)\nRETURN\n", 1+i, sym(names[i]), a)
 		}
 	}
-	fmt.Fprintf(w, ":%d:write(*,*)'DISPATCH FAILED'\n", e)
 	fmt.Fprintf(w, "RETURN\nEND\n")
 }
 func atoi(s string) int {
@@ -1155,7 +1242,6 @@ func atoi(s string) int {
 	}
 	return i
 }
-
 func memsize(s string) string {
 	n := 8192
 	s = strings.ReplaceAll(s, "#1", strconv.Itoa(n))
@@ -1175,9 +1261,10 @@ REAL*8    F64(#8)
 COMMON /MEM/I8
 EQUIVALENCE(I8,I32,I64,F64)
 `
-const builtins = `LOGICAL FUNCTION IB(X)
-INTEGER*4 X
-IB = X .NE. 0
+const builtins = `INTEGER*4 FUNCTION IB(X)
+LOGICAL X
+IB = 0
+IF(X) IB = 1
 RETURN
 END
 REAL*8 FUNCTION FCASTI(X)
@@ -1194,6 +1281,33 @@ REAL*8    X, Y
 EQUIVALENCE(Y,R)
 Y = X
 ICASTF = R
+RETURN
+END
+INTEGER*4 FUNCTION XWRITE(F,N,S,M)
+INTEGER*4 F,N,S,M,I,Q
+INTEGER*1 I8(#1)
+CHARACTER C(#1)
+COMMON /MEM/I8
+EQUIVALENCE(I8,C)
+DO I=1,M
+ Q=FPUT(C(S+M))
+ENDDO
+XWRITE=0
+RETURN
+END
+INTEGER*4 FUNCTION XARG(I,R)
+CHARACTER S(512)
+INTEGER*1 J(512)
+INTEGER*1 I8(#1)
+COMMON /MEM/I8
+EQUIVALENCE(S,J)
+CALL GETARG(I,S)
+XARG = 0
+IF(R .EQ. 0)THEN
+XARG = LEN(S)
+RETURN
+ENDIF
+I8(1+R:R+LEN(S)) = J(1:LEN(S))
 RETURN
 END
 `

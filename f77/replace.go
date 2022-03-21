@@ -42,7 +42,8 @@ func init() {
 		}
 		x = strings.ReplaceAll(x, "cc", "I8")
 		x = strings.ReplaceAll(x, "ii", "I32")
-		x = strings.ReplaceAll(x, "jj", "F64")
+		x = strings.ReplaceAll(x, "ff", "F64")
+		x = strings.ReplaceAll(x, "zz", "ZZ")
 		x = strings.ReplaceAll(x, "c", "INTEGER*1")
 		x = strings.ReplaceAll(x, "i", "INTEGER*4")
 		x = strings.ReplaceAll(x, "f", "REAL*8")
@@ -94,7 +95,7 @@ func init() {
 		r[s+"Z"] = do(F2Z, op)
 	}
 
-	r["divIi"] = DIVIIS
+	r["divIi"] = do(DIVIIS, "")
 
 	// minmax
 	prefix := func(x string, flip bool) string { // r=x!y => r=!(x,y)
@@ -137,7 +138,7 @@ func init() {
 	}
 
 	// exclude softmath.
-	m := "atan satan xatan expmulti ldexp frexp normalize modabsf pow iipow ipow absf"
+	m := "isnan atan satan xatan expmulti ldexp frexp normalize modabsf pow iipow ipow absf"
 	for _, s := range strings.Split(m, " ") {
 		r[s] = ""
 	}
@@ -221,7 +222,7 @@ const F2SZ = `SUBROUTINE ?(RE,IM,Y,R,E)
 f RE,IM
 i Y,R,E
 z X@
-X = CMPLX(RE,IM)
+X = COMPLEX(RE,IM)
 zz(1+R/16:E/16) = X ! zz(1+R/16:E/16)`
 const F2C = `SUBROUTINE ?(X,Y,R,E)
 i X,Y,R,E@
@@ -250,7 +251,7 @@ cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ii(1+Y/4:(Y+E-R)/4) ! X)`
 const CAVF = `SUBROUTINE ?(X,Y,R,E)
 f X
 i Y,R,E@
-cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ff(1+Y/8:(Y+E-R)/8 ! X)`
+cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ff(1+Y/8:(Y+E-R)/8) ! X)`
 
 const CVAC = `SUBROUTINE ?(X,I,Y,R,E)
 c X,I
@@ -262,10 +263,10 @@ cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ii(1+Y/4:(Y+E-R)/4) ! X)`
 const CVAF = `SUBROUTINE ?(X,Y,R,E)
 f X
 i Y,R,E@
-cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ff(1+Y/8:(Y+E-R)/8 ! X)`
+cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ff(1+Y/8:(Y+E-R)/8) ! X)`
 
 const CVC = `SUBROUTINE ?(I,X,Y,R,E)
-c i
+c I
 i X,Y,R,E@
 cc(1+R:E) = MERGE(INT(1,1),INT(0,1),cc(1+X:X+E-R) ! cc(1+Y:Y+E-R))`
 const CVI = `SUBROUTINE ?(X,Y,R,E)
@@ -273,4 +274,4 @@ i X,Y,R,E@
 cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ii(1+X/4:(X+E-R)/4) ! ii(1+Y/4:(Y+E-R)/4))`
 const CVF = `SUBROUTINE ?(X,Y,R,E)
 i X,Y,R,E@
-cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ff(1+X/8:(X+E-R)/8 ! ff(1+Y/8:(X+E-R)/8)`
+cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ff(1+X/8:(X+E-R)/8) ! ff(1+Y/8:(X+E-R)/8))`
