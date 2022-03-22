@@ -138,7 +138,7 @@ func init() {
 	}
 
 	// exclude softmath.
-	m := "isnan atan satan xatan expmulti ldexp frexp normalize modabsf pow iipow ipow absf"
+	m := "isnan atan satan xatan expmulti ldexp frexp normalize modabsf pow iipow ipow"
 	for _, s := range strings.Split(m, " ") {
 		r[s] = ""
 	}

@@ -33,7 +33,7 @@ var filebuf []byte
 // Read(file, length_of_filename, 0) => filesize
 // <0: error, e.g. not exist
 // allocate..
-// Read(0, 0, dst) => copy
+// Read(file, length_of_filename, dst) => copy
 func Read(file, nfile, dst int32) int32 {
 	if dst != 0 {
 		copy(Bytes[dst:], filebuf)

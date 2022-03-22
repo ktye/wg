@@ -14,18 +14,17 @@ func init() {
 	//Data(0, "abc")
 }
 
-type K uint64
-type T uint32
-type f1 = func(int32) int32
-type f2 = func(int32, int32) int32
+const E int32 = 1
 
 func main() {
-	for i := int32(0); i < 300; i++ {
-		SetI8(i, 0)
+	var r, q int32
+	q = 1
+	r = 1
+	if match(r, q) == 0 {
+		dx(E)
 	}
-	SetI8(5, 0)
-	SetI8(7, 0)
-	x := fwh(0, 10)
-	Printf("x", x)
+	dx(q)
 }
-func fwh(a, b int32) int32 { return -1 }
+func match(x, y int32) int32 { return 1 }
+func dx(x int32) int32       { return x }
+func trp(x int32)            {}

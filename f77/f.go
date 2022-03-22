@@ -42,9 +42,17 @@ var glb []byte // global declarations
 var w io.Writer
 
 func init() {
+	res := []string{
+		"I8 I32 I64 F64 FNC MAIN COMMON WRITE FUNCTION SUBROUTINE INT REAL LEN TYPE VALUE DO GOTO IF END ENDIF ENDDO",
+		"IB IOR IAND SHIFL SHIFTR SHIFTA LEADZ ALL ANY NOT MOD MIN MAX HYPOT ATAN2 SIN COS EXP LOG FRACTION EXPONENT",
+		"ABS CMPLX COMPLEX ISNAN IARGC GETARG NALLOC MEMSIZ MEMGRW XARGS XARG XWRITE XREAD XREADI",
+	}
 	reserved = make(map[string]bool)
-	for _, s := range strings.Split("I8 I32 I64 F64 FNC MAIN COMMON WRITE FUNCTION SUBROUTINE INT REAL LEN IB IOR IAND SHIFL SHIFTR SHIFTA LEADZ ALL ANY NOT MOD MIN MAX HYPOT ATAN2 SIN COS EXP LOG FRACTION EXPONENT ABS CMPLX COMPLEX ISNAN IARGC GETARG MEMSIZ MEMGRW XARGS XARG XWRITE XREAD XREADI", " ") {
-		reserved[s] = true
+	for _, r := range res {
+		v := strings.Split(r, " ")
+		for _, s := range v {
+			reserved[s] = true
+		}
 	}
 	t77_ = map[wg.Type]string{
 		wg.U32:   "INTEGER*4",
@@ -91,6 +99,7 @@ func F(out io.Writer, m wg.Module) {
 		s := addsym(f.Name, _sym, sym_)
 		reserved[s] = true // don't reuse function name as local
 	}
+
 	g := make([]string, 0)
 	l := make([]string, 0)
 	{ // globals
@@ -134,6 +143,7 @@ func F(out io.Writer, m wg.Module) {
 	fnc, funcs := ftab(m)
 	//fmt.Fprintf(os.Stderr, "FNC: %s\n", string(fnc))
 	w.Write(fnc)
+	w.Write([]byte(memsize("NALLOC = SHIFTR(#1,16)\n")))
 
 	for i := range g { // global initialization
 		fmt.Fprintf(w, "%s = %s\n", g[i], l[i])
@@ -288,7 +298,7 @@ func emit(x wg.Emitter) {
 	case wg.GlobalGets:
 		globalgets(v)
 	case wg.Drop:
-		emit(v.Expr)
+		drop(v)
 	case wg.Call:
 		call(v)
 	case wg.CallIndirect:
@@ -434,6 +444,19 @@ func globalgets(g wg.GlobalGets) {
 		globalget(wg.GlobalGet(gg))
 	}
 }
+func drop(d wg.Drop) {
+	emit(d.Expr)
+	c, o := d.Expr.(wg.Call)
+	f := fun[c.Func]
+	if o && simple(f) { // f(x) is on stack: assign to a dummy ssa
+		//fmt.Fprintf(w, "stack>: %v\n", stk)
+		f := fun[c.Func]
+		s := pop()
+		fmt.Fprintf(w, "%s = %s\n", ssa(f.Rets[0]), s)
+		pop()
+		//fmt.Fprintf(w, "stack<: %v\n", stk)
+	}
+}
 func bop(op wg.Op) string {
 	s, o := bop_[op]
 	if !o {
@@ -576,6 +599,7 @@ func calli(c wg.CallIndirect) {
 	if o == false {
 		panic("unknown dispatch func:" + sig)
 	}
+
 	e := ev(c.Func)
 	simple := len(c.Args) == 1 && len(c.ResType) == 1
 	if simple {
@@ -630,12 +654,21 @@ func multiresult(e []wg.Expr, origfunc string) (args []string, ismulti bool) {
 	if len(e) != 1 {
 		return args, false
 	}
-	c, o := e[0].(wg.Call)
-	f := fun[c.Func]
-	if o && len(f.Rets) > 1 {
+
+	n := 0
+	c, oc := e[0].(wg.CallIndirect)
+	if oc {
+		n = len(c.ResType)
+	}
+	g, og := e[0].(wg.Call)
+	f := fun[g.Func]
+	if og {
+		n = len(f.Rets)
+	}
+	if (oc || og) && n > 1 {
 		emit(e[0])
-		args = make([]string, len(f.Rets))
-		for i := len(f.Rets) - 1; i >= 0; i-- {
+		args = make([]string, n)
+		for i := n - 1; i >= 0; i-- {
 			args[i] = pop()
 		}
 		return args, true
@@ -754,7 +787,7 @@ func builtinCall(c wg.Call, a []string) bool {
 		fmt.Fprintf(w, "%s = %s(%s)\n", ssa(wg.I32), s, strings.Join(a, ","))
 		return true
 	case "panic":
-		fmt.Fprintf(w, "write(*,*)'trap',%s\nCALL EXIT(1)\n", a[0])
+		fmt.Fprintf(w, "WRITE(*,*)'trap',%s\nCALL EXIT(1)\n", a[0])
 		return true
 	default:
 		return false
@@ -969,10 +1002,26 @@ func wrap77(s []byte) (r []byte) {
 	return r
 }
 func ssa(t wg.Type) string { // create new ssa variable
-	s := addsym("q", _loc, loc_)
+	q := newsym()
+	s := addsym(q, _loc, loc_)
 	push(s)
 	typ[s] = t
 	return s
+}
+func newsym() string {
+	all := make(map[string]bool)
+	for _, a := range CUR.Args {
+		all[a.Name] = true
+	}
+	for _, a := range CUR.Locs {
+		all[a.Name] = true
+	}
+	for i := 'a'; i < 'z'; i++ {
+		if all[string(i)] == false {
+			return string(i)
+		}
+	}
+	panic("no new symbol")
 }
 func loc(s string) string {
 	r, o := loc_[s]
@@ -1216,7 +1265,7 @@ func dispatch(sig string, v []int, names []string, f wg.Func, max int) {
 		jota[i] = strconv.Itoa(1 + i)
 	}
 	fmt.Fprintf(w, "GOTO(%s),FNC(1+N)\n", strings.Join(jota, ","))
-	fmt.Fprintf(w, "write(*,*)'DISPATCH FAILED'\n")
+	fmt.Fprintf(w, "WRITE(*,*)'DISPATCH FAILED'\n")
 	var a string
 	if simple == false {
 		a = strings.Join(arglist[:len(arglist)-1], ",")
@@ -1243,7 +1292,7 @@ func atoi(s string) int {
 	return i
 }
 func memsize(s string) string {
-	n := 8192
+	n := 4 * 64 * 1024
 	s = strings.ReplaceAll(s, "#1", strconv.Itoa(n))
 	s = strings.ReplaceAll(s, "#4", strconv.Itoa(n/4))
 	s = strings.ReplaceAll(s, "#8", strconv.Itoa(n/8))
@@ -1253,6 +1302,8 @@ func memsize(s string) string {
 
 const fhead = `PROGRAM MAIN
 IMPLICIT NONE
+INTEGER *4 NALLOC
+COMMON /NALLOC/NALLOC
 `
 const mem = `INTEGER*1 I8(#1)
 INTEGER*4 I32(#4)
@@ -1267,6 +1318,7 @@ IB = 0
 IF(X) IB = 1
 RETURN
 END
+
 REAL*8 FUNCTION FCASTI(X)
 INTEGER*8 X, Y
 REAL*8    F
@@ -1275,6 +1327,7 @@ Y = X
 FCASTI = F
 RETURN
 END
+
 INTEGER*8 FUNCTION ICASTF(X)
 INTEGER*8 R
 REAL*8    X, Y
@@ -1283,19 +1336,61 @@ Y = X
 ICASTF = R
 RETURN
 END
+
 INTEGER*4 FUNCTION XWRITE(F,N,S,M)
 INTEGER*4 F,N,S,M,I,Q
 INTEGER*1 I8(#1)
-CHARACTER C(#1)
+CHARACTER B(#1)
+CHARACTER(512) C
 COMMON /MEM/I8
-EQUIVALENCE(I8,C)
-DO I=1,M
- Q=FPUT(C(S+M))
+EQUIVALENCE(I8,B)
+IF(N.NE.0)THEN
+DO I=1,N
+C(I:I)=B(F+I)
 ENDDO
+C = C(1:N)
+OPEN(11,FILE=C,STATUS="REPLACE",ACCESS="STREAM",ACTION="WRITE")
+WRITE(11) I8(1+S:S+M)
+CLOSE(UNIT=11)
+ELSE
+DO I=1,M
+ Q = FPUT(B(S+M))
+ENDDO
+ENDIF
 XWRITE=0
 RETURN
 END
+
+INTEGER*4 FUNCTION XREAD(F,N,D)
+INTEGER*4 F,N,D,I,NF
+INTEGER*1 I8(#1)
+CHARACTER B(#1)
+CHARACTER(512) C
+COMMON /MEM/I8
+EQUIVALENCE(I8,B)
+
+DO I=1,N
+C(I:I) = B(F+I)
+ENDDO
+C = C(1:N)
+
+OPEN(11,FILE=C,STATUS="OLD",ACCESS="STREAM",ACTION="READ")
+INQUIRE(FILE=C, SIZE=NF)
+
+IF(D .EQ. 0)THEN
+XREAD=NF
+CLOSE(UNIT=11)
+RETURN
+ENDIF
+
+READ(11) I8(1+D:D+NF)
+CLOSE(UNIT=11)
+XREAD = 0
+RETURN
+END
+
 INTEGER*4 FUNCTION XARG(I,R)
+INTEGER*4 I,R
 CHARACTER S(512)
 INTEGER*1 J(512)
 INTEGER*1 I8(#1)
@@ -1310,4 +1405,59 @@ ENDIF
 I8(1+R:R+LEN(S)) = J(1:LEN(S))
 RETURN
 END
+
+INTEGER*4 FUNCTION XREADI(D,N)
+IMPLICIT NONE
+CHARACTER C
+INTEGER*4 I,S,D,N
+INTEGER*1 I8(128)
+CHARACTER B(128)
+EQUIVALENCE(I8,B)
+COMMON /MEM/I8
+DO I=1,N
+S = FGET(C)
+IF(S.NE.0)THEN
+XREADI = 0
+RETURN
+ENDIF
+B(D+I) = C
+IF(I8(D+I) .EQ. 10)THEN
+XREADI = I-1
+RETURN
+ENDIF
+ENDDO
+XREADI = N
+RETURN
+END
+
+INTEGER *4 FUNCTION MEMSIZ()
+INTEGER *4 NALLOC
+COMMON /NALLOC/NALLOC
+MEMSIZ = NALLOC
+RETURN
+END
+
+INTEGER *4 FUNCTION MEMGRW(N64K)
+INTEGER *4 NALLOC, N64K
+COMMON /NALLOC/NALLOC
+WRITE(*,*) "memgrw", N64K
+MEMSIZ = NALLOC
+NALLOC = NALLOC + N64K
+IF(NALLOC .GT. SHIFTR(#1,16))THEN
+WRITE(*,*) "WSFULL"
+CALL EXIT(1)
+ENDIF
+RETURN
+END
 `
+
+/*
+PURE FUNCTION Copy_a2s(a)  RESULT (s)    ! copy char array to string
+    CHARACTER,INTENT(IN) :: a(:)
+    CHARACTER(SIZE(a)) :: s
+    INTEGER :: i
+    DO i = 1,SIZE(a)
+       s(i:i) = a(i)
+    END DO
+END FUNCTION Copy_a2s
+*/
