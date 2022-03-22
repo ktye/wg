@@ -14,17 +14,9 @@ func init() {
 	//Data(0, "abc")
 }
 
-const E int32 = 1
-
 func main() {
-	var r, q int32
-	q = 1
-	r = 1
-	if match(r, q) == 0 {
-		dx(E)
-	}
-	dx(q)
+	f(1)
 }
-func match(x, y int32) int32 { return 1 }
-func dx(x int32) int32       { return x }
-func trp(x int32)            {}
+func f(x int32) (q int32) {
+	return 1 + x
+}

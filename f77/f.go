@@ -1130,17 +1130,15 @@ func commons(v []string) {
 }
 func sigi(arg, res []wg.Type) (t string) { // indirect function call signature "i:jj"
 	tp := func(t wg.Type) string {
-		switch s := t.String(); s {
-		case "i32":
+		switch t {
+		case wg.I32, wg.U32, wg.I8x16, wg.I32x4:
 			return "i"
-		case "i64":
+		case wg.I64, wg.U64:
 			return "j"
-		case "f64":
+		case wg.F64, wg.F64x2:
 			return "f"
-		case "v128":
-			return "v"
 		default:
-			panic("ftab: unknown type:" + s)
+			panic(fmt.Sprintf("ftab: unknown type: %T", t))
 		}
 	}
 	for i := range res {
@@ -1410,8 +1408,8 @@ INTEGER*4 FUNCTION XREADI(D,N)
 IMPLICIT NONE
 CHARACTER C
 INTEGER*4 I,S,D,N
-INTEGER*1 I8(128)
-CHARACTER B(128)
+INTEGER*1 I8(#1)
+CHARACTER B(#1)
 EQUIVALENCE(I8,B)
 COMMON /MEM/I8
 DO I=1,N

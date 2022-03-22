@@ -31,7 +31,7 @@ func init() {
 			e += ",F64"
 		}
 		if m["zz"] {
-			h += "COMPLEX*16 ZZ(#16)\n"
+			h += "COMPLEX*16 ZZ(#z)\n"
 			e += ",ZZ"
 		}
 		if h != "" {
@@ -208,9 +208,8 @@ const SQRF = `SUBROUTINE ?(X,R,E)
 i X,R,E@
 ff(1+R/8:E/8) = SQRT(ff(1+X/8:(X+E-R)/8))`
 const F2SC = `SUBROUTINE ?(X,Y,R,E)
-c X
-i Y,R,E@
-cc(1+R:E) = X ! cc(1+R:E)`
+i X,Y,R,E@
+cc(1+R:E) = INT(X,1) ! cc(1+R:E)`
 const F2SI = `SUBROUTINE ?(X,Y,R,E)
 i X,Y,R,E@
 ii(1+R/4:E/4) = X ! ii(1+R/4:E/4)`
@@ -242,9 +241,8 @@ ii(1+X/4:E/4) = ii(1+X/4:E/4) / Y`
 
 // todo args are flipped
 const CAVC = `SUBROUTINE ?(X,I,Y,R,E)
-c X,I
-i Y,R,E@
-cc(1+R:E) = MERGE(INT(1,1),INT(0,1),cc(1+Y:Y+E-R) ! X)`
+i X,I,Y,R,E@
+cc(1+R:E) = MERGE(INT(1,1),INT(0,1),cc(1+Y:Y+E-R) ! INT(X,1))`
 const CAVI = `SUBROUTINE ?(X,Y,R,E)
 i X,Y,R,E@
 cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ii(1+Y/4:(Y+E-R)/4) ! X)`
@@ -254,20 +252,18 @@ i Y,R,E@
 cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ff(1+Y/8:(Y+E-R)/8) ! X)`
 
 const CVAC = `SUBROUTINE ?(X,I,Y,R,E)
-c X,I
-i Y,R,E@
-cc(1+R:E) = MERGE(INT(1,1),INT(0,1),cc(1+Y:Y+E-R) ! X)`
+i X,I,Y,R,E@
+cc(1+R:E) = MERGE(INT(1,1),INT(0,1),cc(1+X:X+E-R) ! INT(Y,1))`
 const CVAI = `SUBROUTINE ?(X,Y,R,E)
 i X,Y,R,E@
-cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ii(1+Y/4:(Y+E-R)/4) ! X)`
+cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ii(1+X/4:(X+E-R)/4) ! Y)`
 const CVAF = `SUBROUTINE ?(X,Y,R,E)
-f X
-i Y,R,E@
-cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ff(1+Y/8:(Y+E-R)/8) ! X)`
+f Y
+i X,R,E@
+cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ff(1+X/8:(X+E-R)/8) ! Y)`
 
-const CVC = `SUBROUTINE ?(I,X,Y,R,E)
-c I
-i X,Y,R,E@
+const CVC = `SUBROUTINE ?(X,I,Y,R,E)
+i X,I,Y,R,E@
 cc(1+R:E) = MERGE(INT(1,1),INT(0,1),cc(1+X:X+E-R) ! cc(1+Y:Y+E-R))`
 const CVI = `SUBROUTINE ?(X,Y,R,E)
 i X,Y,R,E@
