@@ -285,6 +285,14 @@ func (m *Module) parseBody(st []ast.Stmt) (r []Stmt) {
 	for i := range st {
 		r = append(r, m.parseStmt(st[i], nil))
 	}
+L:
+	for len(r) == 1 {
+		if l, o := r[0].(Stmts); o {
+			r = l
+		} else {
+			break L
+		}
+	}
 	return r
 }
 func (m *Module) parseStmts(v []ast.Stmt) (r Stmts) {

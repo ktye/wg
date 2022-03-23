@@ -2,6 +2,7 @@ package f77
 
 import (
 	"bytes"
+	bin "encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -33,20 +34,24 @@ var GLO map[string]wg.Type // name77 (all globals)
 var glo map[string]bool    // name77 (within a function)
 var CUR wg.Func            // current function
 var shad map[string]bool   // arg is overwritten by func
-var heap bool              // func uses heap
+var heap map[string]bool   // func uses heap "cijf"
 var lab map[string]int     // label counter
 var tab map[string]string  // sig->name77 (dispatch func)
+var get map[string]bool    // name77 local get
 var rec bool               // current func is recursive
 var stk []string
 var glb []byte // global declarations
 var w io.Writer
 
+const MEMSIZE = 4 * 64 * 1024
+
 func init() {
 	res := []string{
-		"I8 I32 I64 F64 FNC MAIN COMMON WRITE FUNCTION SUBROUTINE INT REAL LEN TYPE VALUE DO GOTO IF END ENDIF ENDDO",
+		"I8 I32 I64 F64 FNC MAIN COMMON READ WRITE FUNCTION SUBROUTINE INT REAL LEN TYPE VALUE",
 		"IB IOR IAND SHIFL SHIFTR SHIFTA LEADZ ALL ANY NOT MOD MIN MAX HYPOT ATAN2 SIN COS EXP LOG FRACTION EXPONENT",
 		"ABS CMPLX COMPLEX ISNAN IARGC GETARG NALLOC MEMSIZ MEMGRW XARGS XARG XWRITE XREAD XREADI",
-	}
+		"BLOCK DATA BLOCKDATA EQUIVALENCE DO GOTO IF THEN ELSE END ENDIF ENDDO STOP",
+	} // todo many more keywords..
 	reserved = make(map[string]bool)
 	for _, r := range res {
 		v := strings.Split(r, " ")
@@ -134,7 +139,7 @@ func F(out io.Writer, m wg.Module) {
 	w = &buf
 
 	w.Write([]byte(fhead))
-	w.Write([]byte(memsize(mem)))
+	w.Write([]byte(memsize("INTEGER*1 I8(#1)\nCOMMON /MEM/I8\n")))
 	w.Write(glb)
 
 	for _, f := range m.Funcs {
@@ -151,6 +156,7 @@ func F(out io.Writer, m wg.Module) {
 
 	fmt.Fprintf(w, "CALL %s\n", sym("main"))
 	fmt.Fprintf(w, "STOP\nEND\n")
+	blockdata(m)
 
 	w.Write(funcs) // dispatch indirect calls
 	for i := range m.Funcs {
@@ -185,15 +191,16 @@ func fn(m wg.Module, k int) {
 		return
 	}
 
-	_ll, ll_, heap_, lab_, ret_, shad_, rec_ := _loc, loc_, heap, lab, ret, shad, rec
-	heap = false
+	_ll, ll_, heap_, lab_, ret_, shad_, get_, rec_ := _loc, loc_, heap, lab, ret, shad, get, rec
+	heap = make(map[string]bool)
 	lab = make(map[string]int)
 	ret = make(map[int]string)
 	shad = make(map[string]bool)
+	get = make(map[string]bool)
 	rec = false
 	initLocs(f)
 	defer func() {
-		_loc, loc_, heap, lab, ret, shad, rec = _ll, ll_, heap_, lab_, ret_, shad_, rec_
+		_loc, loc_, heap, lab, ret, shad, get, rec = _ll, ll_, heap_, lab_, ret_, shad_, get_, rec_
 	}()
 
 	v := make([]string, len(f.Args))
@@ -236,8 +243,31 @@ func fn(m wg.Module, k int) {
 	}
 	fmt.Fprintf(w, "IMPLICIT NONE\n")
 
-	if heap { // only write heap declaration if the function uses it
-		w.Write([]byte(memsize(mem)))
+	if len(heap) > 0 { // only write heap declaration if the function uses it
+		// INTEGER*1 I8(#1)
+		// INTEGER*4 I32(#4)
+		// INTEGER*8 I64(#8)
+		// REAL*8    F64(#8)
+		// COMMON /MEM/I8
+		// EQUIVALENCE(I8,I32,I64,F64)
+		fmt.Fprintf(w, "%s\n", memsize("INTEGER*1 I8(#1)"))
+		eq := ""
+		if heap["i"] {
+			fmt.Fprintf(w, "%s\n", memsize("INTEGER*4 I32(#4)"))
+			eq += ",I32"
+		}
+		if heap["j"] {
+			fmt.Fprintf(w, "%s\n", memsize("INTEGER*8 I64(#8)"))
+			eq += ",I64"
+		}
+		if heap["f"] {
+			fmt.Fprintf(w, "%s\n", memsize("REAL*8    F64(#8)"))
+			eq += ",F64"
+		}
+		fmt.Fprintf(w, "COMMON /MEM/I8\n")
+		if eq != "" {
+			fmt.Fprintf(w, "EQUIVALENCE(I8%s)\n", eq)
+		}
 	}
 	d := make(map[string][]string)
 	for v := range _loc {
@@ -267,6 +297,7 @@ func fn(m wg.Module, k int) {
 	for _, x := range shd {
 		fmt.Fprintf(w, "%s = %s\n", x[0], x[1])
 	}
+	assignLocs(f)
 	w.Write(del(buf.Bytes()))
 	fmt.Fprintf(w, "RETURN\nEND\n")
 }
@@ -364,7 +395,11 @@ func cast(c wg.Cast) {
 	case wg.I32, wg.U32:
 		push("INT(" + ev(c.Arg) + ",4)")
 	case wg.I64, wg.U64:
-		push("INT(" + ev(c.Arg) + ",8)")
+		s := "INT(" + ev(c.Arg) + ",8)"
+		if c.Dst == wg.U64 && (c.Src == wg.I32 || c.Src == wg.U32) {
+			s = "IBITS(" + s + ",0,32)" // clear sign extensions when widening
+		}
+		push(s)
 	case wg.F64:
 		push("REAL(" + ev(c.Arg) + ",8)")
 	default:
@@ -424,7 +459,10 @@ func unary(u wg.Unary) {
 	x := ev(u.X)
 	push("(" + mop(u.Op) + x + ")")
 }
-func localget(l wg.LocalGet) { stk = append(stk, loc(string(l))) }
+func localget(l wg.LocalGet) {
+	get[loc(string(l))] = true
+	stk = append(stk, loc(string(l)))
+}
 func localgets(l wg.LocalGets) {
 	for _, s := range l {
 		emit(wg.LocalGet(s))
@@ -508,6 +546,10 @@ func litstr(l wg.Literal) string {
 				} else {
 					return fmt.Sprintf("%d", i)
 				}
+			}
+		} else {
+			if i, e := strconv.ParseInt(l.Value, 10, 64); e == nil && i > -100000 && i < 100000 {
+				return fmt.Sprintf("INT(%d,8)", i)
 			}
 		}
 		return fmt.Sprintf("INT(%s,%d)", holer(bits, l.Value), bits/8)
@@ -685,7 +727,7 @@ func builtinCall(c wg.Call, a []string) bool {
 	s := c.Func
 	switch s {
 	case "I8", "U8", "SetI8", "I32", "U32", "SetI32", "I64", "U64", "SetI64", "F64", "SetF64":
-		heap = true
+		heap["c"] = true
 		set := false
 		if strings.HasPrefix(s, "Set") {
 			s = strings.TrimPrefix(s, "Set")
@@ -694,6 +736,7 @@ func builtinCall(c wg.Call, a []string) bool {
 		c := 'I'
 		if strings.HasPrefix(s, "F") {
 			c = 'F'
+			heap["f"] = true
 		}
 		sz := 8
 		if strings.HasSuffix(s, "8") == false {
@@ -701,6 +744,11 @@ func builtinCall(c wg.Call, a []string) bool {
 		}
 		div := sz / 8
 		addr := fmt.Sprintf("1+(%s/%d)", a[0], div)
+		if div == 4 {
+			heap["i"] = true
+		} else if div == 8 && c != 'F' {
+			heap["j"] = true
+		}
 		if strings.HasSuffix(addr, "/1)") {
 			addr = strings.TrimSuffix(addr, "/1)") + ")"
 		}
@@ -736,11 +784,11 @@ func builtinCall(c wg.Call, a []string) bool {
 		p("MEMGRW(" + a[0] + ")")
 	case "Memorycopy":
 		fmt.Fprintf(w, "I8(1+%s:%s+%s) = I8(1+%s:%s+%s)\n", a[0], a[0], a[2], a[1], a[1], a[2])
-		heap = true
+		heap["c"] = true
 		return true
 	case "Memoryfill":
 		fmt.Fprintf(w, "I8(1+%s:%s+%s) = INT(%s,1)\n", a[0], a[0], a[2], a[1])
-		heap = true
+		heap["c"] = true
 		return true
 	case "I32clz":
 		p("LEADZ(" + a[0] + ")")
@@ -794,8 +842,10 @@ func builtinCall(c wg.Call, a []string) bool {
 	}
 	return t
 }
-func printf(p wg.Printf) {
+func printf(p wg.Printf) { // Printf("x=%d\n", x) is for debugging only
 	f := strings.TrimPrefix(strings.TrimSuffix(p.Format, `"`), `"`)
+	f = strings.TrimSuffix(f, "\\n")
+	f = strings.ReplaceAll(f, `%12d`, "")
 	wf := "write(*,*) '%s'"
 	for i := 0; i < len(p.Args); i++ {
 		wf += ", " + loc(p.Args[i])
@@ -894,9 +944,11 @@ func do(f wg.For) {
 	if f.Post != nil {
 		emit(f.Post)
 	}
+	fmt.Fprintf(w, "GOTO %d\n", l)
 	if f.Cond != nil {
-		fmt.Fprintf(w, "GOTO %d\nENDIF\n", l)
+		fmt.Fprintf(w, "ENDIF\n")
 	}
+	//fmt.Fprintf(w, "GOTO %d\n", l+1)      // loop next
 	fmt.Fprintf(w, ":%d:CONTINUE\n", l+5) // target for break
 }
 func branch(b wg.Branch) { // break/continue
@@ -1037,8 +1089,6 @@ func sym(s string) string { // fortran names for globals and subroutines
 	}
 	return r
 }
-func initFNC(m wg.Module) { // FNC: array of indirect function index within group (by signature)
-}
 func initLocs(f wg.Func) {
 	_loc, loc_ = make(map[string]string), make(map[string]string)
 	for _, l := range f.Args {
@@ -1057,6 +1107,38 @@ func initLocs(f wg.Func) {
 		ret[i] = n
 	}
 	//}
+}
+func assignLocs(f wg.Func) {
+	// init locals to 0, if they are used by localget and are not assigned first.
+	m := make(map[string]bool)
+	for _, s := range f.Locs {
+		s := loc(s.Name)
+		m[s] = get[s]
+	}
+	st := f.Body
+	if len(st) > 0 {
+		if l, o := st[0].(wg.Stmts); o {
+			st = l
+		}
+		for _, e := range st {
+			a, o := e.(wg.Assign)
+			if o {
+				for i := range a.Name {
+					if a.Glob[i] == false {
+						m[loc(a.Name[i])] = false
+					}
+				}
+			}
+			if o == false { // only check first assign statements
+				break
+			}
+		}
+	}
+	for s, o := range m {
+		if o {
+			fmt.Fprintf(w, "%s = 0\n", s)
+		}
+	}
 }
 func newname() string { // new local name not in loc_
 	s := "r"
@@ -1174,6 +1256,8 @@ func ftab(mod wg.Module) ([]byte, []byte) { // one dispatch function per signatu
 			if j > max {
 				max = j
 			}
+			//s := addsym(sigif(fn), _sym, sym_)
+			//reserved[s] = true
 			s := sigif(fn)
 			m[s] = append(m[s], j)
 			g[j] = len(m[s]) - 1
@@ -1198,7 +1282,7 @@ func ftab(mod wg.Module) ([]byte, []byte) { // one dispatch function per signatu
 		for i := 0; i <= max; i++ {
 			v[i] = "0"
 			if j, o := g[i]; o {
-				v[i] = strconv.Itoa(j)
+				v[i] = strconv.Itoa(1 + j)
 			}
 		}
 		d += "FNC = (/" + strings.Join(v, ",") + "/)\n"
@@ -1220,6 +1304,7 @@ func ftab(mod wg.Module) ([]byte, []byte) { // one dispatch function per signatu
 //func dispatch(mod wg.Module, sig string, v []int, f wg.Func, max int, itab map[int]string, sigt map[string]string) { // emit dispatch function for sig
 func dispatch(sig string, v []int, names []string, f wg.Func, max int) {
 	s := addsym(sig, _sym, sym_)
+	reserved[s] = true
 	tab[sig] = s
 	args := "ABCDEFGHIJKLM"
 	args = args[:len(f.Args)]
@@ -1263,7 +1348,7 @@ func dispatch(sig string, v []int, names []string, f wg.Func, max int) {
 		jota[i] = strconv.Itoa(1 + i)
 	}
 	fmt.Fprintf(w, "GOTO(%s),FNC(1+N)\n", strings.Join(jota, ","))
-	fmt.Fprintf(w, "WRITE(*,*)'DISPATCH FAILED'\n")
+	fmt.Fprintf(w, "WRITE(*,*)'DISPATCH FAILED',N,FNC(1+N)\n")
 	var a string
 	if simple == false {
 		a = strings.Join(arglist[:len(arglist)-1], ",")
@@ -1290,19 +1375,62 @@ func atoi(s string) int {
 	return i
 }
 func memsize(s string) string {
-	n := 4 * 64 * 1024
+	n := MEMSIZE
 	s = strings.ReplaceAll(s, "#1", strconv.Itoa(n))
 	s = strings.ReplaceAll(s, "#4", strconv.Itoa(n/4))
 	s = strings.ReplaceAll(s, "#8", strconv.Itoa(n/8))
 	s = strings.ReplaceAll(s, "#z", strconv.Itoa(n/16))
 	return s
 }
+func blockdata(m wg.Module) {
+	if len(m.Data) == 0 {
+		return
+	}
+	// store all data segments as []int32
+	max := 0
+	for _, d := range m.Data {
+		i := d.Off + len(d.Data)
+		if i > max {
+			max = i
+		}
+	}
+	if 4*(max/4) < max {
+		max = 4 * (1 + max/4)
+	}
+	b := make([]byte, max)
+	for _, d := range m.Data {
+		copy(b[d.Off:], []byte(d.Data))
+	}
+	j := make([]int32, max/4)
+	if e := bin.Read(bytes.NewReader(b), bin.LittleEndian, &j); e != nil {
+		panic(e)
+	}
+
+	fmt.Fprintf(w, memsize(block))
+	v := make([]string, len(j))
+	for i := range j {
+		v[i] = strconv.FormatInt(int64(j[i]), 10)
+		// handle minint32 if exists
+	}
+	s := strings.Join(v, ",")
+	z := (MEMSIZE - 4*len(j)) / 4
+	fmt.Fprintf(w, "%s,%d*0/\nEND\n", s, z)
+}
+
+const block = `BLOCK DATA
+INTEGER*1 I8(#1)
+INTEGER*4 I(#4)
+EQUIVALENCE(I8,I)
+COMMON /MEM/I8
+DATA I/`
 
 const fhead = `PROGRAM MAIN
 IMPLICIT NONE
 INTEGER *4 NALLOC
 COMMON /NALLOC/NALLOC
 `
+
+/*
 const mem = `INTEGER*1 I8(#1)
 INTEGER*4 I32(#4)
 INTEGER*8 I64(#8)
@@ -1310,6 +1438,8 @@ REAL*8    F64(#8)
 COMMON /MEM/I8
 EQUIVALENCE(I8,I32,I64,F64)
 `
+*/
+
 const builtins = `INTEGER*4 FUNCTION IB(X)
 LOGICAL X
 IB = 0

@@ -15,8 +15,7 @@ func init() {
 }
 
 func main() {
-	f(1)
-}
-func f(x int32) (q int32) {
-	return 1 + x
+	i := int32(-2)
+	j := uint64(uint32(i))
+	Printf("i/j", i, j)
 }
