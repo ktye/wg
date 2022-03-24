@@ -72,8 +72,13 @@ func init() {
 	bop_ = map[wg.Op]string{}
 	for _, c := range []string{"+.", "-.", "*.", "/."} {
 		s := strings.TrimSuffix(c, ".")
-		for _, t := range []wg.Type{wg.I32, wg.U32, wg.I64, wg.U64} {
+		for _, t := range []wg.Type{wg.I32, wg.I64} {
 			bop_[wg.Op{s, t}] = s
+		}
+		for _, t := range []wg.Type{wg.U32, wg.U64} {
+			if s != "/" {
+				bop_[wg.Op{s, t}] = s
+			}
 		}
 		if strings.HasSuffix(c, ".") {
 			bop_[wg.Op{s, wg.F64}] = s
@@ -414,11 +419,13 @@ func binary(b wg.Binary) {
 	}
 
 	s := ssa(b.Op.Type)
-	if cop, o := cmp_[b.Op.Name]; o {
-		regret("IB", wg.I32)
-		fmt.Fprintf(w, "%s = IB(%s .%s. %s)\n", s, x, cop, y)
-		return
-	}
+	/*
+		if cop, o := cmp_[b.Op.Name]; o {
+			regret("IB", wg.I32)
+			fmt.Fprintf(w, "%s = IB(%s .%s. %s)\n", s, x, cop, y)
+			return
+		}
+	*/
 
 	f := ""
 	switch b.Op.Name {
@@ -439,6 +446,9 @@ func binary(b wg.Binary) {
 		return
 	case "%":
 		f = "MOD"
+		if b.Op.Type == wg.U32 || b.Op.Type == wg.U64 {
+			panic("unsigned modulo in func " + CUR.Name)
+		}
 	case "^":
 		f = "XOR"
 	}
@@ -451,9 +461,20 @@ func binary(b wg.Binary) {
 func logical(b wg.Binary, x, y string) bool {
 	cop, o := cmp_[b.Op.Name]
 	if o {
+		x, y = unsigned(x, y, b.Op)
 		push(fmt.Sprintf("(%s .%s. %s)", x, cop, y))
 	}
 	return o
+}
+
+func unsigned(x, y string, op wg.Op) (string, string) { // don't allow unsigned comparison
+	c := op.Name == "<" || op.Name == "<=" || op.Name == ">" || op.Name == ">="
+	t := op.Type == wg.U32 || op.Type == wg.U64
+	if c == false || t == false {
+		return x, y
+	}
+	fmt.Fprintf(os.Stderr, "unsigned: %s %s %s (%s %s)\n", x, op.Name, y, op.Type, CUR.Name)
+	return x, y
 }
 func unary(u wg.Unary) {
 	x := ev(u.X)
@@ -882,6 +903,7 @@ func binop(e wg.Expr) (string, string, string) {
 		panic("expected comparison: " + b.Op.Name)
 	}
 	x, y := ev(b.X), ev(b.Y)
+	x, y = unsigned(x, y, b.Op)
 	return x, y, op
 }
 func swtch(s wg.Switch) { // computed goto
