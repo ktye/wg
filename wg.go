@@ -688,6 +688,14 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 			}
 		}
 		if add {
+			min, max := off, off+len(data)
+			for _, d := range m.Data {
+				if max <= d.Off || min >= d.Off+len(d.Data) {
+				} else {
+					println(max, d.Off, min, d.Off+len(d.Data))
+					panic(fmt.Sprintf("data section [%d .. %d] overlaps [%d .. %d]", min, max, d.Off, d.Off+len(d.Data)))
+				}
+			}
 			m.Data = append(m.Data, Data{off, data})
 		}
 		return Nop{}

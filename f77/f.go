@@ -148,7 +148,7 @@ func F(out io.Writer, m wg.Module) {
 	fnc, funcs := ftab(m)
 	//fmt.Fprintf(os.Stderr, "FNC: %s\n", string(fnc))
 	w.Write(fnc)
-	w.Write([]byte(memsize("NALLOC = SHIFTR(#1,16)\n")))
+	w.Write([]byte(memsize("NALLOC = 1\n")))
 
 	for i := range g { // global initialization
 		fmt.Fprintf(w, "%s = %s\n", g[i], l[i])
@@ -766,6 +766,9 @@ func builtinCall(c wg.Call, a []string) bool {
 				rhs = "INT(" + rhs + ",1)"
 			}
 			fmt.Fprintf(w, "%c%d(%s) = %s\n", c, sz, addr, rhs)
+			if s == "I64" && CUR.Name == "kinit" {
+				fmt.Fprintf(os.Stderr, "%c%d(%s) = %s /SetI64 %s\n", c, sz, addr, rhs, strings.Join(a, " "))
+			}
 		} else {
 			r := fmt.Sprintf("%c%d(%s)", c, sz, addr)
 			if s == "I8" || s == "U8" {
@@ -1394,11 +1397,14 @@ func blockdata(m wg.Module) {
 			max = i
 		}
 	}
+	println("max>", max)
 	if 4*(max/4) < max {
 		max = 4 * (1 + max/4)
 	}
+	println("max", max)
 	b := make([]byte, max)
 	for _, d := range m.Data {
+		println("copy", d.Off, d.Off+len(d.Data))
 		copy(b[d.Off:], []byte(d.Data))
 	}
 	j := make([]int32, max/4)
@@ -1426,7 +1432,7 @@ DATA I/`
 
 const fhead = `PROGRAM MAIN
 IMPLICIT NONE
-INTEGER *4 NALLOC
+INTEGER*4 NALLOC
 COMMON /NALLOC/NALLOC
 `
 
@@ -1568,8 +1574,7 @@ END
 INTEGER *4 FUNCTION MEMGRW(N64K)
 INTEGER *4 NALLOC, N64K
 COMMON /NALLOC/NALLOC
-WRITE(*,*) "memgrw", N64K
-MEMSIZ = NALLOC
+MEMGRW = NALLOC
 NALLOC = NALLOC + N64K
 IF(NALLOC .GT. SHIFTR(#1,16))THEN
 WRITE(*,*) "WSFULL"

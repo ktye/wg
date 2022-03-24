@@ -43,22 +43,50 @@ func I8(addr int32) int32           { return int32(int8(Bytes[addr])) }
 func U8(addr int32) uint32          { return uint32(Bytes[addr]) }
 func SetI8(addr int32, value int32) { Bytes[addr] = byte(value) }
 
-func I16(addr int32) int32           { return int32(int16(binary.LittleEndian.Uint16(Bytes[addr:]))) }
-func U16(addr int32) uint32          { return uint32(binary.LittleEndian.Uint16(Bytes[addr:])) }
-func I32(addr int32) int32           { return int32(binary.LittleEndian.Uint32(Bytes[addr:])) }
-func U32(addr int32) uint32          { return binary.LittleEndian.Uint32(Bytes[addr:]) }
-func I64(addr int32) int64           { return int64(binary.LittleEndian.Uint64(Bytes[addr:])) }
-func U64(addr int32) uint64          { return binary.LittleEndian.Uint64(Bytes[addr:]) }
-func F32(addr int32) float32         { return math.Float32frombits(binary.LittleEndian.Uint32(Bytes[addr:])) }
-func F64(addr int32) float64         { return math.Float64frombits(binary.LittleEndian.Uint64(Bytes[addr:])) }
-func SetI16(addr int32, value int32) { binary.LittleEndian.PutUint16(Bytes[addr:], uint16(value)) }
-func SetI32(addr int32, value int32) { binary.LittleEndian.PutUint32(Bytes[addr:], uint32(value)) }
-func SetI64(addr int32, value int64) { binary.LittleEndian.PutUint64(Bytes[addr:], uint64(value)) }
+func I16(addr int32) int32 {
+	aln(addr, 2)
+	return int32(int16(binary.LittleEndian.Uint16(Bytes[addr:])))
+}
+func U16(addr int32) uint32 { aln(addr, 2); return uint32(binary.LittleEndian.Uint16(Bytes[addr:])) }
+func I32(addr int32) int32  { aln(addr, 4); return int32(binary.LittleEndian.Uint32(Bytes[addr:])) }
+func U32(addr int32) uint32 { aln(addr, 4); return binary.LittleEndian.Uint32(Bytes[addr:]) }
+func I64(addr int32) int64  { aln(addr, 8); return int64(binary.LittleEndian.Uint64(Bytes[addr:])) }
+func U64(addr int32) uint64 { aln(addr, 8); return binary.LittleEndian.Uint64(Bytes[addr:]) }
+func F32(addr int32) float32 {
+	aln(addr, 4)
+	return math.Float32frombits(binary.LittleEndian.Uint32(Bytes[addr:]))
+}
+func F64(addr int32) float64 {
+	aln(addr, 8)
+	return math.Float64frombits(binary.LittleEndian.Uint64(Bytes[addr:]))
+}
+func SetI16(addr int32, value int32) {
+	aln(addr, 2)
+	binary.LittleEndian.PutUint16(Bytes[addr:], uint16(value))
+}
+func SetI32(addr int32, value int32) {
+	aln(addr, 4)
+	binary.LittleEndian.PutUint32(Bytes[addr:], uint32(value))
+}
+func SetI64(addr int32, value int64) {
+	aln(addr, 8)
+	binary.LittleEndian.PutUint64(Bytes[addr:], uint64(value))
+}
 func SetF32(addr int32, value float32) {
+	aln(addr, 4)
 	binary.LittleEndian.PutUint32(Bytes[addr:], math.Float32bits(value))
 }
 func SetF64(addr int32, value float64) {
+	aln(addr, 8)
 	binary.LittleEndian.PutUint64(Bytes[addr:], math.Float64bits(value))
+}
+
+const aligncheck = true
+
+func aln(addr int32, a int32) {
+	if aligncheck && (addr&(a-1) != 0) {
+		panic(fmt.Sprintf("non-aligned memory access addr=%d (%d)", addr, a))
+	}
 }
 
 /* unsafe variants
