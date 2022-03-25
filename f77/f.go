@@ -26,7 +26,7 @@ var loc_ map[string]string
 var bop_ map[wg.Op]string
 var mop_ map[wg.Op]string
 var cmp_ map[string]string
-var ret map[int]string     //name77 return var name
+var ret map[int]string     // name77 return var name
 var fun map[string]wg.Func // fname
 var typ map[string]wg.Type // name77
 var con map[string]string  // constants as literals
@@ -398,7 +398,11 @@ func cast(c wg.Cast) {
 	}
 	switch c.Dst {
 	case wg.I32, wg.U32:
-		push("INT(" + ev(c.Arg) + ",4)")
+		if c.Src == wg.I32 || c.Src == wg.U32 {
+			push(ev(c.Arg))
+		} else {
+			push("INT(" + ev(c.Arg) + ",4)")
+		}
 	case wg.I64, wg.U64:
 		s := "INT(" + ev(c.Arg) + ",8)"
 		if c.Dst == wg.U64 && (c.Src == wg.I32 || c.Src == wg.U32) {
@@ -419,14 +423,6 @@ func binary(b wg.Binary) {
 	}
 
 	s := ssa(b.Op.Type)
-	/*
-		if cop, o := cmp_[b.Op.Name]; o {
-			regret("IB", wg.I32)
-			fmt.Fprintf(w, "%s = IB(%s .%s. %s)\n", s, x, cop, y)
-			return
-		}
-	*/
-
 	f := ""
 	switch b.Op.Name {
 	case "<<", ">>":
@@ -446,8 +442,11 @@ func binary(b wg.Binary) {
 		return
 	case "%":
 		f = "MOD"
-		if b.Op.Type == wg.U32 || b.Op.Type == wg.U64 {
-			panic("unsigned modulo in func " + CUR.Name)
+		if b.Op.Type == wg.U32 {
+			fmt.Fprintf(w, "%s = INT(MOD(%s,%s),4)\n", s, u64(x), u64(y))
+			return
+		} else if b.Op.Type == wg.U64 {
+			panic(fmt.Sprintf("unsigned modulo in func %s: %s %% %s", CUR.Name, x, y))
 		}
 	case "^":
 		f = "XOR"
@@ -461,20 +460,28 @@ func binary(b wg.Binary) {
 func logical(b wg.Binary, x, y string) bool {
 	cop, o := cmp_[b.Op.Name]
 	if o {
-		x, y = unsigned(x, y, b.Op)
-		push(fmt.Sprintf("(%s .%s. %s)", x, cop, y))
+		if s := unsigned(x, y, b.Op); s != "" {
+			push(s)
+		} else {
+			push(fmt.Sprintf("(%s .%s. %s)", x, cop, y))
+		}
 	}
 	return o
 }
-
-func unsigned(x, y string, op wg.Op) (string, string) { // don't allow unsigned comparison
+func u64(s string) string { return "IBITS(INT(" + s + ",8),0,32)" }
+func unsigned(x, y string, op wg.Op) string { // u32 are supported using 64 bit comparisons, u64 are not allowed
 	c := op.Name == "<" || op.Name == "<=" || op.Name == ">" || op.Name == ">="
-	t := op.Type == wg.U32 || op.Type == wg.U64
-	if c == false || t == false {
-		return x, y
+	if c == false {
+		return ""
 	}
-	fmt.Fprintf(os.Stderr, "unsigned: %s %s %s (%s %s)\n", x, op.Name, y, op.Type, CUR.Name)
-	return x, y
+	if op.Type == wg.U64 {
+		panic(fmt.Sprintf("unsigned 64bit comparision: %s %s %s (%s %s)\n", x, op.Name, y, op.Type, CUR.Name))
+	}
+	if op.Type != wg.U32 {
+		return ""
+	}
+	cop := cmp_[op.Name]
+	return fmt.Sprintf("(%s .%s. %s)", u64(x), cop, u64(y))
 }
 func unary(u wg.Unary) {
 	x := ev(u.X)
@@ -645,6 +652,7 @@ func multiassign(a wg.Assign) {
 	for i := len(a.Name) - 1; i >= 0; i-- {
 		s := a.Name[i]
 		if s == "_" {
+			pop()
 			continue
 		}
 		if a.Glob[i] {
@@ -671,8 +679,13 @@ func calli(c wg.CallIndirect) {
 		push(fmt.Sprintf("%s(%s,%s)", d, x, e))
 	} else {
 		args := make([]string, 0)
-		for _, a := range c.Args {
-			args = append(args, ev(a))
+		for i, a := range c.Args {
+			if globalargs(a) {
+				s := pop()
+				args = append(args, s)
+			} else {
+				args = append(args, evssa(a, c.ArgType[i]))
+			}
 		}
 		for _, t := range c.ResType {
 			args = append(args, ssa(t))
@@ -684,8 +697,21 @@ func calli(c wg.CallIndirect) {
 func call(c wg.Call) {
 	args, ismulti := multiresult(c.Args, c.Func)
 	if ismulti == false {
-		for _, a := range c.Args {
-			args = append(args, ev(a))
+		order := len(c.Args) > 1
+		for i, a := range c.Args {
+			if globalargs(a) {
+				args = append(args, pop())
+			} else {
+				var s string
+				fn, isfn := fun[c.Func]
+				if order && isfn {
+					t := fn.Args[i].Type
+					s = evssa(a, t)
+				} else {
+					s = ev(a)
+				}
+				args = append(args, s)
+			}
 		}
 	}
 
@@ -738,6 +764,35 @@ func multiresult(e []wg.Expr, origfunc string) (args []string, ismulti bool) {
 	}
 	return args, false
 }
+func globalargs(a wg.Expr) bool { // globals may be mutated, make a copy before call
+	if _, o := a.(wg.GlobalGet); o {
+		return globalarg(a)
+	}
+	if g, o := a.(wg.GlobalGets); o {
+		if len(g) == 1 {
+			return globalarg(wg.GlobalGet(g[0]))
+		}
+		panic("call with multiple global arguments nyi")
+	}
+	return false
+}
+func globalarg(a wg.Expr) bool {
+	if g, o := a.(wg.GlobalGet); o {
+		if _, o := con[string(g)]; o {
+			return false
+		}
+		s := ev(g)
+		t, o := GLO[sym(string(g))]
+		if o == false {
+			panic("global-type")
+		}
+		n := ssa(t)
+		fmt.Fprintf(w, "%s = %s\n", n, s)
+		push(n)
+		return true
+	}
+	return false
+}
 func regret(fname string, t wg.Type) { // register function call as local declaration
 	_loc[fname] = "*function call*"
 	typ[fname] = t
@@ -786,6 +841,9 @@ func builtinCall(c wg.Call, a []string) bool {
 			if div == 1 {
 				rhs = "INT(" + rhs + ",1)"
 			}
+
+			//if sz == 36 && addr
+
 			fmt.Fprintf(w, "%c%d(%s) = %s\n", c, sz, addr, rhs)
 			if s == "I64" && CUR.Name == "kinit" {
 				fmt.Fprintf(os.Stderr, "%c%d(%s) = %s /SetI64 %s\n", c, sz, addr, rhs, strings.Join(a, " "))
@@ -849,7 +907,7 @@ func builtinCall(c wg.Call, a []string) bool {
 		fmt.Fprintf(w, "CALL EXIT("+a[0]+")\n")
 		return true
 	case "Args":
-		p("IARGC()")
+		p("(1+IARGC())")
 	case "Arg", "Read", "ReadIn", "Write":
 		s := "X" + strings.ToUpper(s)
 		if len(s) > 6 {
@@ -878,13 +936,15 @@ func printf(p wg.Printf) { // Printf("x=%d\n", x) is for debugging only
 	fmt.Fprintf(w, wf, f)
 }
 func iff(i wg.If) {
-	x, y, op := binop(i.If)
-
-	if strings.HasPrefix(x, "ISNAN(") && op == "EQ" && y == "1" {
-		fmt.Fprintf(w, "IF(%s)THEN\n", x)
-	} else {
-		fmt.Fprintf(w, "IF(%s .%s. %s)THEN\n", x, op, y)
-	}
+	/*
+		x, y, op := compare(i.If)
+		if strings.HasPrefix(x, "ISNAN(") && op == "EQ" && y == "1" {
+			fmt.Fprintf(w, "IF(%s)THEN\n", x)
+		} else {
+			fmt.Fprintf(w, "IF(%s .%s. %s)THEN\n", x, op, y)
+		}
+	*/
+	fmt.Fprintf(w, "IF%sTHEN\n", cond(i.If))
 	emit(i.Then)
 	if i.Else != nil {
 		fmt.Fprintf(w, "ELSE\n")
@@ -892,7 +952,7 @@ func iff(i wg.If) {
 	}
 	fmt.Fprintf(w, "ENDIF\n")
 }
-func binop(e wg.Expr) (string, string, string) {
+func cond(e wg.Expr) string {
 	b, o := e.(wg.Binary)
 	if o == false {
 		fmt.Fprintf(os.Stderr, "binop: e=%+v\n", e)
@@ -903,8 +963,13 @@ func binop(e wg.Expr) (string, string, string) {
 		panic("expected comparison: " + b.Op.Name)
 	}
 	x, y := ev(b.X), ev(b.Y)
-	x, y = unsigned(x, y, b.Op)
-	return x, y, op
+	if strings.HasPrefix(x, "ISNAN(") && op == "EQ" && y == "1" {
+		return "(" + x + ")"
+	}
+	if s := unsigned(x, y, b.Op); s != "" {
+		return s
+	}
+	return "(" + x + " ." + op + ". " + y + ")"
 }
 func swtch(s wg.Switch) { // computed goto
 	e := ev(s.E)
@@ -959,8 +1024,9 @@ func do(f wg.For) {
 
 	fmt.Fprintf(w, ":%d:CONTINUE\n", l) // : will be stripped by indent()
 	if f.Cond != nil {
-		x, y, op := binop(f.Cond)
-		fmt.Fprintf(w, "IF(%s .%s. %s)THEN\n", x, op, y)
+		//x, y, op := compare(f.Cond)
+		//fmt.Fprintf(w, "IF(%s .%s. %s)THEN\n", x, op, y)
+		fmt.Fprintf(w, "IF%sTHEN\n", cond(f.Cond))
 	}
 	if f.Body != nil {
 		emit(f.Body)
@@ -998,6 +1064,16 @@ func pop() string {
 }
 func push(s string)          { stk = append(stk, s) }
 func ev(e wg.Emitter) string { emit(e); return pop() }
+func evssa(e wg.Emitter, t wg.Type) string { // for creation of new variables for nontrivial args
+	switch e.(type) {
+	case wg.Literal, wg.LocalGet, wg.GlobalGet:
+		return ev(e)
+	default:
+		s := ssa(t)
+		fmt.Fprintf(w, "%s = %s\n", s, ev(e))
+		return s
+	}
+}
 func del(b []byte) (r []byte) { // delete unused labels
 	v := bytes.Split(b, []byte{10})
 	m := make(map[int]bool)
@@ -1546,19 +1622,24 @@ RETURN
 END
 
 INTEGER*4 FUNCTION XARG(I,R)
-INTEGER*4 I,R
-CHARACTER S(512)
+INTEGER*4 I,R,L
+CHARACTER S*512
 INTEGER*1 J(512)
 INTEGER*1 I8(#1)
 COMMON /MEM/I8
 EQUIVALENCE(S,J)
-CALL GETARG(I,S)
+CALL GET_COMMAND_ARGUMENT(I,S,L)
+
 XARG = 0
 IF(R .EQ. 0)THEN
-XARG = LEN(S)
+XARG = L
 RETURN
 ENDIF
-I8(1+R:R+LEN(S)) = J(1:LEN(S))
+
+DO I=1,L
+I8(R+I) = ICHAR(S(I:I),1)
+ENDDO
+
 RETURN
 END
 

@@ -15,7 +15,10 @@ func init() {
 }
 
 func main() {
-	i := int32(-2)
-	j := uint64(uint32(i))
-	Printf("i/j", i, j)
+	var x int32
+	x, _ = e(1)
+	Printf("%12d%12d\n", x)
+}
+func e(x int32) (int32, int32) {
+	return x + 1, x + 2
 }

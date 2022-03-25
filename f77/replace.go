@@ -185,8 +185,11 @@ S = SIN(X)`
 const SEQI = `SUBROUTINE ?(P,E)
 i P,E,R@
 R = P/4
-DO I=1,(E-P)/4
+DO I=1,(E-P)/4,4
  ii(R+I) = I-1
+ ii(R+I+1) = I
+ ii(R+I+2) = I+1
+ ii(R+I+3) = I+2
 ENDDO`
 const FWH = `SUBROUTINE ?(X,N,R)
 i X,N,R@
