@@ -212,20 +212,20 @@ i X,R,E@
 ff(1+R/8:E/8) = SQRT(ff(1+X/8:(X+E-R)/8))`
 const F2SC = `SUBROUTINE ?(X,Y,R,E)
 i X,Y,R,E@
-cc(1+R:E) = INT(X,1) ! cc(1+R:E)`
+cc(1+R:E) = INT(X,1) ! cc(1+Y:Y+E-R)`
 const F2SI = `SUBROUTINE ?(X,Y,R,E)
 i X,Y,R,E@
-ii(1+R/4:E/4) = X ! ii(1+R/4:E/4)`
+ii(1+R/4:E/4) = X ! ii(1+Y/4:(Y+E-R)/4)`
 const F2SF = `SUBROUTINE ?(X,Y,R,E)
 f X
 i Y,R,E@
-ff(1+R/8:E/8) = X ! ff(1+R/8:E/8)`
+ff(1+R/8:E/8) = X ! ff(1+Y/8:(Y+E-R)/8)`
 const F2SZ = `SUBROUTINE ?(RE,IM,Y,R,E)
 f RE,IM
 i Y,R,E
 z X@
 X = COMPLEX(RE,IM)
-zz(1+R/16:E/16) = X ! zz(1+R/16:E/16)`
+zz(1+R/16:E/16) = X ! zz(1+Y/16:(Y+E-R)/16)`
 const F2C = `SUBROUTINE ?(X,Y,R,E)
 i X,Y,R,E@
 cc(1+R:E) = cc(1+X:X+E-R) ! cc(1+Y:Y+E-R)`
