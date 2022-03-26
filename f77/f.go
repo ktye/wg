@@ -1509,14 +1509,11 @@ func blockdata(m wg.Module) {
 			max = i
 		}
 	}
-	println("max>", max)
 	if 4*(max/4) < max {
 		max = 4 * (1 + max/4)
 	}
-	println("max", max)
 	b := make([]byte, max)
 	for _, d := range m.Data {
-		println("copy", d.Off, d.Off+len(d.Data))
 		copy(b[d.Off:], []byte(d.Data))
 	}
 	j := make([]int32, max/4)
