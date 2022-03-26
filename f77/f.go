@@ -43,7 +43,7 @@ var stk []string
 var glb []byte // global declarations
 var w io.Writer
 
-const MEMSIZE = 4 * 64 * 1024
+const MEMSIZE = 8 * 64 * 1024
 
 func init() {
 	res := []string{
@@ -470,18 +470,20 @@ func logical(b wg.Binary, x, y string) bool {
 }
 func u64(s string) string { return "IBITS(INT(" + s + ",8),0,32)" }
 func unsigned(x, y string, op wg.Op) string { // u32 are supported using 64 bit comparisons, u64 are not allowed
-	c := op.Name == "<" || op.Name == "<=" || op.Name == ">" || op.Name == ">="
-	if c == false {
+	if op.Type != wg.U32 && op.Type != wg.U64 {
 		return ""
 	}
-	if op.Type == wg.U64 {
-		panic(fmt.Sprintf("unsigned 64bit comparision: %s %s %s (%s %s)\n", x, op.Name, y, op.Type, CUR.Name))
+	m := map[string]string{
+		"<":  "BLT",
+		">":  "BGT",
+		"<=": "BLE",
+		">=": "BGE",
 	}
-	if op.Type != wg.U32 {
+	c, o := m[op.Name]
+	if o == false {
 		return ""
 	}
-	cop := cmp_[op.Name]
-	return fmt.Sprintf("(%s .%s. %s)", u64(x), cop, u64(y))
+	return fmt.Sprintf("(%s(%s,%s))", c, x, y)
 }
 func unary(u wg.Unary) {
 	x := ev(u.X)
