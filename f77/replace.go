@@ -128,17 +128,14 @@ func init() {
 		q := "." + strings.ToUpper(s) + "."
 		r[s+"cC"] = do(CAVC, q)
 		r[s+"iI"] = do(CAVI, q)
-		r[s+"fF"] = do(CAVF, q)
 		r[s+"Cc"] = do(CVAC, q)
 		r[s+"Ii"] = do(CVAI, q)
-		r[s+"Ff"] = do(CVAF, q)
 		r[s+"C"] = do(CVC, q)
 		r[s+"I"] = do(CVI, q)
-		r[s+"F"] = do(CVF, q)
 	}
 
 	// exclude softmath.
-	m := "isnan atan satan xatan expmulti ldexp frexp normalize modabsf pow iipow ipow"
+	m := "isnan atan satan xatan expmulti ldexp frexp normalize modabsf pow"
 	for _, s := range strings.Split(m, " ") {
 		r[s] = ""
 	}
@@ -169,12 +166,13 @@ i X,N@
 IF(ALL(cc(1+X:X+N).EQ.0)) ? = 0`
 const INC = `i FUNCTION ?(X,Y,V,E)
 i X,Y,V,E@
-? = 0*V
-IF(ANY(cc(1+Y:E).EQ.INT(X,1))) ? = 1`
+? = FINDLOC(cc(1+Y:E),INT(X,1),1)
+IF(? .GT. 0) ? = Y + ? - 1`
 const INI = `i FUNCTION ?(X,Y,V,E)
 i X,Y,V,E@
-? = 0*V
-IF(ANY(ii(1+Y/4:E/4).EQ.X)) ? = 1`
+? = 0
+? = FINDLOC(ii(1+Y/4:E/4),X,1)
+IF(? .GT. 0) ? = Y + 4*(?-1)`
 const NOT = `SUBROUTINE ?(X,R,E)
 i X,E,R@
 cc(1+R:E) = IAND(INT(1,1),NOT(cc(1+X:X+E-R)))`
@@ -194,7 +192,7 @@ ENDDO`
 const FWH = `SUBROUTINE ?(X,N,R)
 i X,N,R@
 R = FINDLOC(cc(1+X:X+N),INT(1,1),1)
-IF(R.EQ.0) R = -2147483647
+IF(R .EQ. 0) R = -2147483647
 R = R - 1`
 const STORE = `SUBROUTINE ?()` //nyi
 const CATCH = `SUBROUTINE ?()`
@@ -242,35 +240,24 @@ const DIVIIS = `SUBROUTINE ?(X,Y,E)
 i X,Y,E@
 ii(1+X/4:E/4) = ii(1+X/4:E/4) / Y`
 
-// todo args are flipped
 const CAVC = `SUBROUTINE ?(X,I,Y,R,E)
 i X,I,Y,R,E@
-cc(1+R:E) = MERGE(INT(1,1),INT(0,1),cc(1+Y:Y+E-R) ! INT(X,1))`
+cc(1+R:E) = MERGE(INT(1,1),INT(0,1),INT(X,1) ! cc(1+Y:Y+E-R))`
 const CAVI = `SUBROUTINE ?(X,Y,R,E)
 i X,Y,R,E@
-cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ii(1+Y/4:(Y+E-R)/4) ! X)`
-const CAVF = `SUBROUTINE ?(X,Y,R,E)
-f X
-i Y,R,E@
-cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ff(1+Y/8:(Y+E-R)/8) ! X)`
-
-const CVAC = `SUBROUTINE ?(X,I,Y,R,E)
+cc(1+R:E) = MERGE(INT(1,1),INT(0,1),X ! ii(1+Y/4:Y/4+E-R))`
+const CVAC = `SUBROUTINE ?(X,Y,I,R,E)
 i X,I,Y,R,E@
 cc(1+R:E) = MERGE(INT(1,1),INT(0,1),cc(1+X:X+E-R) ! INT(Y,1))`
 const CVAI = `SUBROUTINE ?(X,Y,R,E)
 i X,Y,R,E@
-cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ii(1+X/4:(X+E-R)/4) ! Y)`
-const CVAF = `SUBROUTINE ?(X,Y,R,E)
-f Y
-i X,R,E@
-cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ff(1+X/8:(X+E-R)/8) ! Y)`
-
-const CVC = `SUBROUTINE ?(X,I,Y,R,E)
+cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ii(1+X/4:X/4+E-R) ! Y)`
+const CVC = `SUBROUTINE ?(I,X,Y,R,E)
 i X,I,Y,R,E@
 cc(1+R:E) = MERGE(INT(1,1),INT(0,1),cc(1+X:X+E-R) ! cc(1+Y:Y+E-R))`
 const CVI = `SUBROUTINE ?(X,Y,R,E)
 i X,Y,R,E@
-cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ii(1+X/4:(X+E-R)/4) ! ii(1+Y/4:(Y+E-R)/4))`
+cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ii(1+X/4:X/4+E-R) ! ii(1+Y/4:Y/4+E-R))`
 const CVF = `SUBROUTINE ?(X,Y,R,E)
 i X,Y,R,E@
-cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ff(1+X/8:(X+E-R)/8) ! ff(1+Y/8:(X+E-R)/8))`
+cc(1+R:E) = MERGE(INT(1,1),INT(0,1),ff(1+X/8:X/8+E-R) ! ff(1+Y/8:X/8+E-R))`

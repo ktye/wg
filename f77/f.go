@@ -43,7 +43,7 @@ var stk []string
 var glb []byte // global declarations
 var w io.Writer
 
-const MEMSIZE = 8 * 64 * 1024
+const MEMSIZE = 32 * 64 * 1024
 
 func init() {
 	res := []string{
@@ -404,11 +404,15 @@ func cast(c wg.Cast) {
 			push("INT(" + ev(c.Arg) + ",4)")
 		}
 	case wg.I64, wg.U64:
-		s := "INT(" + ev(c.Arg) + ",8)"
-		if c.Dst == wg.U64 && (c.Src == wg.I32 || c.Src == wg.U32) {
-			s = "IBITS(" + s + ",0,32)" // clear sign extensions when widening
+		if c.Src == wg.I64 || c.Src == wg.U64 {
+			push(ev(c.Arg))
+		} else {
+			s := "INT(" + ev(c.Arg) + ",8)"
+			if c.Dst == wg.U64 && (c.Src == wg.I32 || c.Src == wg.U32) {
+				s = "IBITS(" + s + ",0,32)" // clear sign extensions when widening
+			}
+			push(s)
 		}
-		push(s)
 	case wg.F64:
 		push("REAL(" + ev(c.Arg) + ",8)")
 	default:
@@ -899,7 +903,7 @@ func builtinCall(c wg.Call, a []string) bool {
 		p(strings.ToUpper(s[3:]) + "(" + a[0] + "," + a[1] + ")")
 	case "exp", "log":
 		p(strings.ToUpper(s) + "(" + a[0] + ")")
-	case "pow", "ipow":
+	case "pow":
 		p("(" + a[0] + "**" + a[1] + ")")
 	case "frexp":
 		fmt.Fprintf(w, "%s = FRACTION(%s)\n", ssa(wg.F64), a[0])
@@ -989,8 +993,8 @@ func swtch(s wg.Switch) { // computed goto
 	fmt.Fprintf(w, "GOTO(%s), 1+%s\n", strings.Join(v, ","), e)
 	if s.Def != nil {
 		emit(s.Def)
-		fmt.Fprint(w, je)
 	}
+	fmt.Fprint(w, je) //even for empty default branch
 	for i := range s.Case {
 		fmt.Fprintf(w, ":%d:CONTINUE\n", l[i])
 		emit(s.Case[i])
@@ -1044,6 +1048,14 @@ func do(f wg.For) {
 	//fmt.Fprintf(w, "GOTO %d\n", l+1)      // loop next
 	fmt.Fprintf(w, ":%d:CONTINUE\n", l+5) // target for break
 }
+
+/* this fails for
+   for{
+   	for{
+	}
+	if() { break } // label the outer for and "break L"
+   }
+*/
 func branch(b wg.Branch) { // break/continue
 	l := 10 * len(lab)
 	if b.Label != "" {
