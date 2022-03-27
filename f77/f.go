@@ -552,41 +552,46 @@ func litstr(l wg.Literal) string {
 		}
 		return strings.Replace(strconv.FormatFloat(f, 'e', -1, 64), "e", "D", 1)
 	}
-	holer := func(bits int, s string) string {
-		var u uint64
-		var e error
-		if strings.HasPrefix(s, "-") {
-			var i int64
-			i, e = strconv.ParseInt(s, 10, bits)
-			u = uint64(i)
-		} else if strings.HasPrefix(s, "0x") {
-			u, e = strconv.ParseUint(s[2:], 16, bits)
-		} else {
-			u, e = strconv.ParseUint(s, 10, bits)
-		}
-		if e != nil {
-			panic("cannot parse int literal: " + s)
-		}
-		return fmt.Sprintf("z'%X'", u)
-	}
-	bits := atoi(l.Type.String()[1:])
 	switch l.Type {
 	case wg.I32, wg.U32, wg.I64, wg.U64:
-		if l.Type == wg.I32 || l.Type == wg.U32 {
-			i := atoi(l.Value)
-			if i < 100000 && i > -100000 {
-				if i < 0 {
-					return fmt.Sprintf("(%d)", i)
-				} else {
-					return fmt.Sprintf("%d", i)
+
+		var i int64
+		var u uint64
+		var e error
+		s := l.Value
+		if strings.HasPrefix(l.Value, "0x") {
+			s = s[2:]
+			u, e = strconv.ParseUint(s, 16, 64)
+			i = int64(u)
+		} else if l.Type == wg.U32 || l.Type == wg.U64 {
+			u, e = strconv.ParseUint(s, 10, 64)
+			i = int64(u)
+		} else {
+			i, e = strconv.ParseInt(s, 10, 32)
+		}
+		if e != nil {
+			panic("cannot parse literal: " + l.Value)
+		}
+		if l.Type == wg.U32 || l.Type == wg.I32 {
+			d := int32(i)
+			if d < 0 {
+				if d == -2147483648 {
+					return fmt.Sprintf("INT(z'80000000',4)")
 				}
+				return fmt.Sprintf("(%d)", d)
+			} else {
+				return fmt.Sprintf("%d", d)
 			}
 		} else {
-			if i, e := strconv.ParseInt(l.Value, 10, 64); e == nil && i > -100000 && i < 100000 {
-				return fmt.Sprintf("INT(%d,8)", i)
+			if i == -9223372036854775808 {
+				return fmt.Sprintf("INT(z'8000000000000000',8)")
+			}
+			if i < 0 {
+				return fmt.Sprintf("(%d_8)", i)
+			} else {
+				return fmt.Sprintf("%d_8", i)
 			}
 		}
-		return fmt.Sprintf("INT(%s,%d)", holer(bits, l.Value), bits/8)
 	case wg.F64:
 		return fmt.Sprintf("REAL(%s,8)", double(l.Value))
 	default:
