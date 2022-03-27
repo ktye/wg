@@ -64,5 +64,8 @@ func ReadIn(dst, n int32) int32 {
 	if e != nil {
 		return 0
 	}
+	if nr > 0 && Bytes[dst+int32(nr)-1] == 10 {
+		nr -= 1
+	}
 	return int32(nr)
 }
