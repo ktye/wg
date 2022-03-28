@@ -69,3 +69,4 @@ func ReadIn(dst, n int32) int32 {
 	}
 	return int32(nr)
 }
+func Native(x, y int64) int64 { return x }

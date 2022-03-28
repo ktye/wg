@@ -18,6 +18,7 @@ func (m Module) Wat(w io.Writer) {
 (import "env" "Read"  (func $Read  (param i32) (param i32) (param i32) (result i32)))
 (import "env" "Write" (func $Write (param i32) (param i32) (param i32) (param i32) (result i32)))
 (import "env" "ReadIn" (func $ReadIn (param i32) (param i32) (result i32)))
+(import "env" "Native" (func $Native (param i64) (param i64) (result i64)))
 `)
 
 	/*

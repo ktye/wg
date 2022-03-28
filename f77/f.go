@@ -852,13 +852,7 @@ func builtinCall(c wg.Call, a []string) bool {
 			if div == 1 {
 				rhs = "INT(" + rhs + ",1)"
 			}
-
-			//if sz == 36 && addr
-
 			fmt.Fprintf(w, "%c%d(%s) = %s\n", c, sz, addr, rhs)
-			if s == "I64" && CUR.Name == "kinit" {
-				fmt.Fprintf(os.Stderr, "%c%d(%s) = %s /SetI64 %s\n", c, sz, addr, rhs, strings.Join(a, " "))
-			}
 		} else {
 			r := fmt.Sprintf("%c%d(%s)", c, sz, addr)
 			if s == "I8" || s == "U8" {
