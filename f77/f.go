@@ -49,7 +49,7 @@ func init() {
 	res := []string{
 		"I8 I32 I64 F64 FNC MAIN COMMON READ WRITE FUNCTION SUBROUTINE INT REAL LEN TYPE VALUE",
 		"IB IOR IAND SHIFL SHIFTR SHIFTA LEADZ ALL ANY NOT MOD MIN MAX HYPOT ATAN2 SIN COS EXP LOG FRACTION EXPONENT",
-		"ABS CMPLX COMPLEX ISNAN IARGC GETARG NALLOC MEMSIZ MEMGRW XARGS XARG XWRITE XREAD XREADI",
+		"ABS CMPLX COMPLEX ISNAN IARGC GETARG NALLOC MEMSIZ MEMGRW XARGS XARG XWRITE XREAD XREADI XNATIV",
 		"BLOCK DATA BLOCKDATA EQUIVALENCE DO GOTO IF THEN ELSE END ENDIF ENDDO STOP CHAR ICHAR",
 	} // todo many more keywords..
 	reserved = make(map[string]bool)
@@ -913,13 +913,17 @@ func builtinCall(c wg.Call, a []string) bool {
 		return true
 	case "Args":
 		p("(1+IARGC())")
-	case "Arg", "Read", "ReadIn", "Write":
+	case "Arg", "Read", "ReadIn", "Write", "Native":
 		s := "X" + strings.ToUpper(s)
 		if len(s) > 6 {
 			s = s[:6]
 		}
-		regret(s, wg.I32)
-		fmt.Fprintf(w, "%s = %s(%s)\n", ssa(wg.I32), s, strings.Join(a, ","))
+		t := wg.Type(wg.I32)
+		if s == "XNATIV" {
+			t = wg.I64
+		}
+		regret(s, t)
+		fmt.Fprintf(w, "%s = %s(%s)\n", ssa(t), s, strings.Join(a, ","))
 		return true
 	case "panic":
 		fmt.Fprintf(w, "WRITE(*,*)'trap',%s\nCALL EXIT(1)\n", a[0])
@@ -1669,6 +1673,12 @@ RETURN
 ENDIF
 ENDDO
 XREADI = N
+RETURN
+END
+
+INTEGER*8 FUNCTION XNATIV(X,Y)
+INTEGER*8 X,Y
+XNATIV = 0
 RETURN
 END
 

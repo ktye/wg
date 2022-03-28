@@ -525,14 +525,18 @@ func (c Call) c(w io.Writer) {
 	case "Exit":
 		c.Args[0].c(w)
 		fmt.Fprintf(w, "exit(%s);\n", c1())
-	case "Args", "Arg", "Read", "Write", "ReadIn":
+	case "Args", "Arg", "Read", "Write", "ReadIn", "Native":
 		f := c.Func
 		var a []string
 		for i := range c.Args {
 			c.Args[i].c(w)
 			a = append(a, c1())
 		}
-		fmt.Fprintf(w, "%s=%s(%s);", c1n("int32_t"), f, strings.Join(a, ","))
+		t := Type("int32_t")
+		if f == "Native" {
+			t = "int64_t"
+		}
+		fmt.Fprintf(w, "%s=%s(%s);", c1n(t), f, strings.Join(a, ","))
 	default:
 		// nyi: "I64clz", "I32ctz", "I64ctz", "I32popcnt", "I64popcnt", "F64abs", "F64sqrt", "F64ceil", "F64floor", "F64nearest", "F64min", "F64max", "F64copysign", "I64reinterpret_f64", "F64reinterpret_i64", "I32reinterpret_f32", "F32reinterpret_i32"
 		call(prefix(c.Func))
@@ -812,6 +816,13 @@ int32_t ReadIn(int32_t dst, int32_t n){
  if(r==NULL){ //todo eof
   return 0;
  }else return (int32_t)strnlen(_M+dst,n);
+}
+int64_t Native(int64_t x, int64_t y){
+#ifdef NATIVE
+return native(x, y);
+#else
+return 0;
+#endif
 }
 void panic() { longjmp(_jb_,1); }
 `
