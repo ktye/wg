@@ -11,6 +11,7 @@ func main() {
 	a := os.Args[1:]
 	c := false
 	f := false
+	k := false
 	if a[0] == "-try" {
 		wg.TryCatch = true
 		a = a[1:]
@@ -27,6 +28,10 @@ func main() {
 		f = true
 		a = a[1:]
 	}
+	if a[0] == "-k" {
+		k = true
+		a = a[1:]
+	}
 	if a[0] == "-prefix" { // -c only prefix symbols with a[1]
 		wg.Prefix = a[1]
 		a = a[2:]
@@ -40,6 +45,8 @@ func main() {
 		m.C(os.Stdout)
 	} else if f {
 		f77.F(os.Stdout, m)
+	} else if k {
+		m.K(os.Stdout)
 	} else {
 		m.Wat(os.Stdout)
 	}
