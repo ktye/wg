@@ -146,7 +146,6 @@ func (m Module) K(w io.Writer) {
 			for i, t := range v.ResType {
 				push("res", p, i, typ[t])
 			}
-			// nodes(v.Args, p)
 		case Cast:
 			p = push("cst", p, na, typ[v.Dst])
 			push("typ", p, na, typ[v.Src])
