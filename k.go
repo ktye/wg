@@ -1,11 +1,11 @@
 package wg
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
-	"bytes"
 	"math"
 	"sort"
 	"strconv"
@@ -29,7 +29,9 @@ func (m Module) K(w io.Writer) {
 	}
 	typ := map[Type]string{
 		I32: "i",
+		U32: "I",
 		I64: "j",
+		U64: "J",
 		F64: "f",
 	}
 	atoi := func(s string) int {
@@ -137,8 +139,8 @@ func (m Module) K(w io.Writer) {
 		case CallIndirect:
 			p = push("cali", p, na, "")
 			node(v.Func, p)
-			for i, a := range v.Args {
-				node(a, i)
+			for _, a := range v.Args {
+				node(a, p)
 			}
 			for i, t := range v.ArgType {
 				push("arg", p, i, typ[t])
@@ -234,11 +236,13 @@ func (m Module) K(w io.Writer) {
 		}
 	}
 
+	root := push("", na, 0, "")
+
 	// Memory
 	if m.Memory != "" {
-		push("mem", na, atoi(m.Memory), "")
+		push("mem", root, atoi(m.Memory), "")
 		if m.Memory2 != "" {
-			push("mem", na, atoi(m.Memory2), "")
+			push("mem", root, atoi(m.Memory2), "")
 		}
 	}
 
@@ -249,7 +253,7 @@ func (m Module) K(w io.Writer) {
 	}
 	sort.Strings(v)
 	if len(v) > 0 {
-		imports := push("imports", na, na, "")
+		imports := push("imports", root, na, "")
 		for _, k := range v {
 			i := m.Imports[k]
 			p := push("import", imports, na, k)
@@ -265,7 +269,6 @@ func (m Module) K(w io.Writer) {
 	}
 
 	// Globals
-	globals := push("glo", na, na, "")
 	for _, a := range m.Globals {
 		n := len(a.Name)
 		for i, s := range a.Name {
@@ -276,15 +279,14 @@ func (m Module) K(w io.Writer) {
 			if a.Const[i] {
 				v = "con"
 			}
-			g := push(v, globals, na, s)
+			g := push(v, root, na, s)
 			node(a.Expr[i].(Literal), g)
 		}
 	}
 
-
 	// Table
 	for _, te := range m.Table {
-		t := push("tab", na, na, "")
+		t := push("tab", root, na, "")
 		for j, s := range te.Names {
 			push("te", t, te.Off+j, s)
 		}
@@ -292,14 +294,14 @@ func (m Module) K(w io.Writer) {
 
 	// Data
 	for _, d := range m.Data {
-		p := push("dat", na, len(D), "")
+		p := push("dat", root, len(D), "")
 		push("dat", p, len(d.Data), "")
 		D = append(D, []byte(d.Data)...)
 	}
 
 	// Funcs
 	for i, f := range m.Funcs {
-		p := push("fn", na, i, f.Name)
+		p := push("fn", root, i, f.Name)
 		for i, a := range f.Args {
 			ai := push("arg", p, i, typ[a.Type])
 			push("sym", ai, i, a.Name)
@@ -329,5 +331,4 @@ func (m Module) K(w io.Writer) {
 	fmt.Fprintf(w, "P:%s\n", ints(P))
 	fmt.Fprintf(w, "I:%s\n", ints(I))
 	fmt.Fprintf(w, "S:%s\n", syms(S))
-	fmt.Fprintf(w, "t:+`t`p`i`s!(T;P;I;S)\n")
 }
