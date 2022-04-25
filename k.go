@@ -84,7 +84,7 @@ func (m Module) K(w io.Writer) {
 			}
 		}
 		C = append(C, u)
-		return 8*len(C) - 1
+		return 8 * (len(C) - 1)
 	}
 	literal := func(l Literal) int {
 		switch l.Type {
