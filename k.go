@@ -28,12 +28,16 @@ func (m Module) K(w io.Writer) {
 		return len(T) - 1
 	}
 	typ := map[Type]string{
-		I32: "i",
-		U32: "I",
-		I64: "j",
-		U64: "J",
-		F64: "f",
+		I32:   "i",
+		U32:   "u",
+		I64:   "j",
+		U64:   "k",
+		F64:   "f",
+		I8x16: "C",
+		I32x4: "I",
+		F64x2: "F",
 	}
+	var vars map[string]bool
 	un := func(s string) string {
 		r := map[string]string{"-": "neg", "!": "not"}[s]
 		if r == "" {
@@ -130,6 +134,14 @@ func (m Module) K(w io.Writer) {
 			panic(fmt.Sprintf("literal type nyi: %v", l.Type))
 		}
 	}
+	varname := func(s string, init bool) string {
+		s = strings.ReplaceAll(s, ".", "")
+		if vars[s] && init {
+			panic("var " + s + " already exists")
+		}
+		vars[s] = true
+		return s
+	}
 	var node func(e Emitter, p int)
 	nodes := func(v []Expr, p int) {
 		for i := range v {
@@ -183,14 +195,14 @@ func (m Module) K(w io.Writer) {
 		case GlobalGet:
 			push("Get", p, na, string(v)) // later: Get->get na->glo
 		case LocalGet:
-			push("get", p, na, string(v)) // later: na->declaration node Arg|Loc
+			push("get", p, na, varname(string(v), false)) // later: na->declaration node Arg|Loc
 		case GlobalGets:
-			p = push("Gts", p, na, "")
+			//p = push("Gts", p, na, "")
 			for i := range v {
 				node(GlobalGet(v[i]), p)
 			}
 		case LocalGets:
-			p = push("gts", p, na, "")
+			//p = push("gts", p, na, "")
 			for i := range v {
 				node(LocalGet(v[i]), p)
 			}
@@ -321,9 +333,10 @@ func (m Module) K(w io.Writer) {
 		for i, r := range f.Rets {
 			push("res", p, i, typ[r])
 		}
+		vars = make(map[string]bool)
 		for i, l := range f.Locs {
 			li := push("loc", p, i, typ[l.Type])
-			push("sym", li, i, l.Name)
+			push("sym", li, i, varname(l.Name, true))
 		}
 		b := push("ast", p, na, "")
 		node(f.Body, b)
