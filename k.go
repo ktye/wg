@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-func (m Module) K(w io.Writer) {
+func (m Module) K(w io.Writer, lisp bool) {
 	const na int = -1 << 31
 	var C []uint64
 	var D []byte
@@ -134,9 +134,10 @@ func (m Module) K(w io.Writer) {
 			panic(fmt.Sprintf("literal type nyi: %v", l.Type))
 		}
 	}
-	varname := func(s string, init bool) string {
-		s = strings.ReplaceAll(s, ".", "")
-		if vars[s] && init {
+	sy := func(s string) string { return strings.ReplaceAll(s, ".", "") }
+	sym := func(s string) string { // sym(
+		s = sy(s)
+		if vars[s] {
 			panic("var " + s + " already exists")
 		}
 		vars[s] = true
@@ -151,9 +152,13 @@ func (m Module) K(w io.Writer) {
 	node = func(e Emitter, p int) {
 		switch v := e.(type) {
 		case Assign:
-			p = push("asn", p, na, v.Mod)
+			mod := v.Mod
+			if mod == ":=" || mod == "=" {
+				mod = ""
+			}
+			p = push("asn", p, na, mod)
 			for i, s := range v.Name {
-				n := push("sym", p, na, s)
+				n := push("sym", p, na, sy(s))
 				push("typ", p, na, typ[v.Typs[i]])
 				if len(v.Expr) > i { // e.g. a, b := f(x)
 					node(v.Expr[i], n)
@@ -180,7 +185,7 @@ func (m Module) K(w io.Writer) {
 			node(v.Arg, p)
 		case Drop:
 			p = push("drp", p, na, "")
-			node(v.Expr, p)
+			node(v.Expr.(Call), p) // all children are calls
 		case Nop:
 			p = push("nop", p, na, "")
 		case Unary:
@@ -195,7 +200,7 @@ func (m Module) K(w io.Writer) {
 		case GlobalGet:
 			push("Get", p, na, string(v)) // later: Get->get na->glo
 		case LocalGet:
-			push("get", p, na, varname(string(v), false)) // later: na->declaration node Arg|Loc
+			push("get", p, na, sy(string(v))) // later: na->declaration node Arg|Loc
 		case GlobalGets:
 			//p = push("Gts", p, na, "")
 			for i := range v {
@@ -262,7 +267,7 @@ func (m Module) K(w io.Writer) {
 		}
 	}
 
-	root := push("", na, 0, "")
+	root := push("prg", na, 0, "")
 
 	// Memory
 	if m.Memory != "" {
@@ -283,7 +288,7 @@ func (m Module) K(w io.Writer) {
 			i := m.Imports[k]
 			p := push("imp", root, na, k)
 			push("pkg", p, na, i.Package)
-			push("sym", p, na, i.Func)
+			push("sym", p, na, sy(i.Func))
 			for _, a := range i.Arg {
 				push("arg", p, na, typ[a])
 			}
@@ -328,7 +333,7 @@ func (m Module) K(w io.Writer) {
 		p := push("fun", root, i, f.Name)
 		for i, a := range f.Args {
 			ai := push("arg", p, i, typ[a.Type])
-			push("sym", ai, i, a.Name)
+			push("sym", ai, i, sy(a.Name))
 		}
 		for i, r := range f.Rets {
 			push("res", p, i, typ[r])
@@ -336,7 +341,7 @@ func (m Module) K(w io.Writer) {
 		vars = make(map[string]bool)
 		for i, l := range f.Locs {
 			li := push("loc", p, i, typ[l.Type])
-			push("sym", li, i, varname(l.Name, true))
+			push("sym", li, i, sym(l.Name))
 		}
 		b := push("ast", p, na, "")
 		node(f.Body, b)
@@ -350,10 +355,50 @@ func (m Module) K(w io.Writer) {
 	var con bytes.Buffer
 	fatal(binary.Write(&con, binary.LittleEndian, C))
 
+	if lisp {
+		Lisp(w, T, P, I, S)
+		return
+	}
+
 	fmt.Fprintf(w, "C:0x%s\n", hex.EncodeToString(con.Bytes()))
 	fmt.Fprintf(w, "D:0x%s\n", hex.EncodeToString(D))
 	fmt.Fprintf(w, "T:%s\n", syms(T))
 	fmt.Fprintf(w, "P:%s\n", ints(P))
 	fmt.Fprintf(w, "I:%s\n", ints(I))
 	fmt.Fprintf(w, "S:%s\n", syms(S))
+}
+
+func Lisp(w io.Writer, T []string, P []int, I []int, S []string) {
+	l := 0
+	space := func() string { return strings.Repeat(" ", l) }
+	children := func(p int) (r []int) {
+		for i := range P {
+			if P[i] == p {
+				r = append(r, i)
+			}
+		}
+		return r
+	}
+	na := func(i int) string {
+		if i == -2147483648 {
+			return "0n"
+		}
+		return strconv.Itoa(i)
+	}
+	ns := func(s string) string {
+		if s == "" {
+			return "-"
+		}
+		return s
+	}
+	var write func(int)
+	write = func(i int) {
+		fmt.Fprintf(w, "%s%s %d %s %s\n", space(), T[i], i, na(I[i]), ns(S[i]))
+		l++
+		for _, j := range children(i) {
+			write(j)
+		}
+		l--
+	}
+	write(0)
 }
