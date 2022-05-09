@@ -37,6 +37,7 @@ func (t Type) String() string {
 }
 
 type Module struct {
+	Package   string
 	Memory    string
 	Memory2   string
 	Imports   map[string]Import

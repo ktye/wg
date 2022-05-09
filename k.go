@@ -267,7 +267,8 @@ func (m Module) K(w io.Writer, lisp bool) {
 		}
 	}
 
-	root := push("prg", na, 0, "")
+	root := push("prg", 0, 0, "")
+	push("sym", 0, 0, m.Package)
 
 	// Memory
 	if m.Memory != "" {

@@ -90,6 +90,7 @@ func filterImports(a *ast.File) { // the merged package file may have duplicated
 func position(a ast.Node) string       { return fset.Position(a.Pos()).String() }
 func reflectType(a interface{}) string { return reflect.TypeOf(a).String() }
 func parseFile(a *ast.File) (r Module) {
+	r.Package = a.Name.Name
 	r.Imports = make(map[string]Import)
 	r.Exports = make(map[string]bool)
 	r.Globals = r.parseGlobals(a)
