@@ -104,6 +104,24 @@ func (m Module) K(w io.Writer, lisp bool) {
 		C = append(C, u)
 		return 8 * (len(C) - 1)
 	}
+	floatdata := func(f float64) { // append the string form in 8 or 16 bytes padded with space
+		s := strconv.FormatFloat(f, 'g', -1, 64)
+		pad := 8 - len(s)
+		n := 1
+		if pad <= 0 {
+			pad = 16 - len(s)
+			n++
+		}
+		if pad <= 0 {
+			panic("long float literal")
+		}
+		s += strings.Repeat(" ", pad)
+		b := []byte(s)
+		C = append(C, binary.LittleEndian.Uint64(b))
+		if n > 1 {
+			C = append(C, binary.LittleEndian.Uint64(b[8:]))
+		}
+	}
 	literal := func(l Literal) int {
 		switch l.Type {
 		case I32, U32:
@@ -112,6 +130,11 @@ func (m Module) K(w io.Writer, lisp bool) {
 				fatal(e)
 				return int(i)
 			} else {
+				if l.Type == U32 {
+					i, e := strconv.ParseUint(l.Value, 10, 32)
+					fatal(e)
+					return int(int32(i))
+				}
 				i, e := strconv.ParseInt(l.Value, 10, 32)
 				fatal(e)
 				return int(i)
@@ -129,7 +152,9 @@ func (m Module) K(w io.Writer, lisp bool) {
 		case F64:
 			f, e := strconv.ParseFloat(l.Value, 64)
 			fatal(e)
-			return data(math.Float64bits(f))
+			r := data(math.Float64bits(f))
+			floatdata(f)
+			return r
 		default:
 			panic(fmt.Sprintf("literal type nyi: %v", l.Type))
 		}
@@ -267,8 +292,7 @@ func (m Module) K(w io.Writer, lisp bool) {
 		}
 	}
 
-	root := push("prg", 0, 0, "")
-	push("sym", 0, 0, m.Package)
+	root := push("prg", 0, 0, m.Package)
 
 	// Memory
 	if m.Memory != "" {
