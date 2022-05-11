@@ -106,20 +106,22 @@ func (m Module) K(w io.Writer, lisp bool) {
 	}
 	floatdata := func(f float64) { // append the string form in 8 or 16 bytes padded with space
 		s := strconv.FormatFloat(f, 'g', -1, 64)
-		pad := 8 - len(s)
-		n := 1
+		pad, n := 8-len(s), 1
 		if pad <= 0 {
 			pad = 16 - len(s)
 			n++
 		}
 		if pad <= 0 {
-			panic("long float literal")
+			pad = 24 - len(s)
+			n++
+		}
+		if pad <= 0 {
+			panic("long float literal: " + s)
 		}
 		s += strings.Repeat(" ", pad)
 		b := []byte(s)
-		C = append(C, binary.LittleEndian.Uint64(b))
-		if n > 1 {
-			C = append(C, binary.LittleEndian.Uint64(b[8:]))
+		for i := 0; i < n; i++ {
+			C = append(C, binary.LittleEndian.Uint64(b[8*i:]))
 		}
 	}
 	literal := func(l Literal) int {
@@ -334,8 +336,11 @@ func (m Module) K(w io.Writer, lisp bool) {
 			if a.Const[i] {
 				v = "con"
 			}
+			t := a.Typs[i]
 			g := push(v, root, na, s)
-			node(a.Expr[i].(Literal), g)
+			l := a.Expr[i].(Literal)
+			l.Type = t // overwrite literal type (which maybe wrong)
+			node(l, g)
 		}
 	}
 
