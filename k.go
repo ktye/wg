@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-func (m Module) K(w io.Writer, lisp bool) {
+func (m Module) K(w io.Writer) {
 	const na int = -1 << 31
 	var C []uint64
 	var D []byte
@@ -179,17 +179,22 @@ func (m Module) K(w io.Writer, lisp bool) {
 	node = func(e Emitter, p int) {
 		switch v := e.(type) {
 		case Assign:
+			if len(v.Expr) == 0 {
+				return // declarations
+			}
 			mod := v.Mod
 			if mod == ":=" || mod == "=" {
 				mod = ""
 			}
-			p = push("asn", p, na, mod)
-			for i, s := range v.Name {
-				n := push("sym", p, na, sy(s))
+			p = push("asn", p, len(v.Name), mod)
+			for _, s := range v.Name {
+				push("sym", p, na, sy(s))
+			}
+			for i := range v.Name {
 				push("typ", p, na, typ[v.Typs[i]])
-				if len(v.Expr) > i { // e.g. a, b := f(x)
-					node(v.Expr[i], n)
-				}
+			}
+			for _, e := range v.Expr { // len(v.Expr) is 1 for multi assign: e.g. a, b := f(x)
+				node(e, p)
 			}
 		case Call:
 			p = push("cal", p, na, v.Func) // later: na->func node
@@ -242,9 +247,13 @@ func (m Module) K(w io.Writer, lisp bool) {
 			p = push("ret", p, na, "")
 			nodes(v, p)
 		case Stmts:
-			p = push("stm", p, na, "")
-			for i := range v {
-				node(v[i], p)
+			if len(v) == 1 {
+				node(v[0], p)
+			} else {
+				p = push("stm", p, na, "")
+				for i := range v {
+					node(v[i], p)
+				}
 			}
 		case If:
 			p = push("cnd", p, na, "")
@@ -374,7 +383,9 @@ func (m Module) K(w io.Writer, lisp bool) {
 			push("sym", li, i, sym(l.Name))
 		}
 		b := push("ast", p, na, "")
-		node(f.Body, b)
+		for i := range f.Body {
+			node(f.Body[i], b)
+		}
 		if f.Defer != nil {
 			d := push("dfr", p, na, "")
 			node(f.Defer.(Call), d)
@@ -385,50 +396,10 @@ func (m Module) K(w io.Writer, lisp bool) {
 	var con bytes.Buffer
 	fatal(binary.Write(&con, binary.LittleEndian, C))
 
-	if lisp {
-		Lisp(w, T, P, I, S)
-		return
-	}
-
 	fmt.Fprintf(w, "C:0x%s\n", hex.EncodeToString(con.Bytes()))
 	fmt.Fprintf(w, "D:0x%s\n", hex.EncodeToString(D))
 	fmt.Fprintf(w, "T:%s\n", syms(T))
 	fmt.Fprintf(w, "P:%s\n", ints(P))
 	fmt.Fprintf(w, "I:%s\n", ints(I))
 	fmt.Fprintf(w, "S:%s\n", syms(S))
-}
-
-func Lisp(w io.Writer, T []string, P []int, I []int, S []string) {
-	l := 0
-	space := func() string { return strings.Repeat(" ", l) }
-	children := func(p int) (r []int) {
-		for i := range P {
-			if P[i] == p {
-				r = append(r, i)
-			}
-		}
-		return r
-	}
-	na := func(i int) string {
-		if i == -2147483648 {
-			return "0n"
-		}
-		return strconv.Itoa(i)
-	}
-	ns := func(s string) string {
-		if s == "" {
-			return "-"
-		}
-		return s
-	}
-	var write func(int)
-	write = func(i int) {
-		fmt.Fprintf(w, "%s%s %d %s %s\n", space(), T[i], i, na(I[i]), ns(S[i]))
-		l++
-		for _, j := range children(i) {
-			write(j)
-		}
-		l--
-	}
-	write(0)
 }
