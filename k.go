@@ -182,8 +182,8 @@ func (m Module) K(w io.Writer) {
 			if len(v.Expr) == 0 {
 				return // declarations
 			}
-			mod := v.Mod
-			if mod == ":=" || mod == "=" {
+			mod := strings.TrimSuffix(v.Mod, "=")
+			if mod == ":" {
 				mod = ""
 			}
 			p = push("asn", p, len(v.Name), mod)
@@ -200,7 +200,7 @@ func (m Module) K(w io.Writer) {
 			p = push("cal", p, na, v.Func) // later: na->func node
 			nodes(v.Args, p)
 		case CallIndirect:
-			p = push("cli", p, na, "")
+			p = push("cli", p, len(v.Args), "")
 			node(v.Func, p)
 			for _, a := range v.Args {
 				node(a, p)
