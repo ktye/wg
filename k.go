@@ -307,9 +307,9 @@ func (m Module) K(w io.Writer) {
 
 	// Memory
 	if m.Memory != "" {
-		push("mem", root, atoi(m.Memory), "")
+		push("mem", root, atoi(m.Memory), "a")
 		if m.Memory2 != "" {
-			push("mem", root, atoi(m.Memory2), "")
+			push("mem", root, atoi(m.Memory2), "b")
 		}
 	}
 
@@ -362,8 +362,11 @@ func (m Module) K(w io.Writer) {
 
 	// Data
 	for _, d := range m.Data {
-		p := push("dat", root, len(D), "")
-		push("dat", p, len(d.Data), "")
+		if n := d.Off - len(D); n < 0 {
+			panic("overlapping data")
+		} else {
+			D = append(D, bytes.Repeat([]byte{0}, n)...)
+		}
 		D = append(D, []byte(d.Data)...)
 	}
 
