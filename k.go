@@ -46,7 +46,7 @@ func (m Module) K(w io.Writer) {
 		return r
 	}
 	bi := func(s string) string {
-		r := map[string]string{"==": "eql", "<": "les", ">": "mor", ">=": "gte", "<=": "lte", "&&": "and", "&": "and", "||": "orr", "|": "orr", "^": "xor", "!=": "neq", "&^": "ant", "-": "sub", "+": "add", "*": "mul", "/": "div", "%": "mod", ">>": "shr", "<<": "shl"}[s]
+		r := map[string]string{"==": "eql", "<": "les", ">": "mor", ">=": "gte", "<=": "lte", "&&": "bnd", "&": "and", "||": "bor", "|": "orr", "^": "xor", "!=": "neq", "&^": "ant", "-": "sub", "+": "add", "*": "mul", "/": "div", "%": "mod", ">>": "shr", "<<": "shl"}[s]
 		if r == "" {
 			panic(fmt.Sprintf("binary %q nyi", s))
 		}
@@ -197,7 +197,17 @@ func (m Module) K(w io.Writer) {
 				node(e, p)
 			}
 		case Call:
-			p = push("cal", p, na, v.Func) // later: na->func node
+			m := map[string]string{"I8": "b", "I32": "i", "I64": "j", "F64": "f", "SetI8": "b", "SetI32": "i", "SetI64": "j", "SetF64": "f"}
+			t := m[v.Func]
+			if t == "" {
+				p = push("cal", p, na, strings.ReplaceAll(v.Func, ".", "")) // later: na->func node
+			} else {
+				if strings.HasPrefix(v.Func, "Set") {
+					p = push("sto", p, na, t)
+				} else {
+					p = push("lod", p, na, t)
+				}
+			}
 			nodes(v.Args, p)
 		case CallIndirect:
 			p = push("cli", p, len(v.Args), "")
