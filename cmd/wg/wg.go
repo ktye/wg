@@ -12,26 +12,32 @@ func main() {
 	c := false
 	f := false
 	k := false
-	if a[0] == "-try" {
+	a0 := func() string {
+		if len(a) == 0 {
+			return ""
+		}
+		return a[0]
+	}
+	if a0() == "-try" {
 		wg.TryCatch, a = true, a[1:]
 	}
-	if a[0] == "-multi" {
+	if a0() == "-multi" {
 		wg.MultiMemory, a = true, a[1:]
 	}
-	if a[0] == "-c" { // C
+	if a0() == "-c" { // C
 		c, a = true, a[1:]
 	}
-	if a[0] == "-f" { // f77
+	if a0() == "-f" { // f77
 		f, a = true, a[1:]
 	}
-	if a[0] == "-k" {
+	if a0() == "-k" {
 		k, a = true, a[1:]
 	}
-	if a[0] == "-prefix" { // -c only prefix symbols with a[1]
+	if a0() == "-prefix" { // -c only prefix symbols with a[1]
 		wg.Prefix = a[1]
 		a = a[2:]
 	}
-	if a[0] == "-nomain" { // -c only skip main
+	if a0() == "-nomain" { // -c only skip main
 		wg.Nomain, a = true, a[1:]
 	}
 	m := wg.Parse(a[0])
