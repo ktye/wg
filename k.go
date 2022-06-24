@@ -20,6 +20,7 @@ func (m Module) K(w io.Writer) {
 	var P []int
 	var I []int
 	var S []string
+	var rtyp string
 	push := func(t string, p int, i int, s string) int {
 		T = append(T, t)
 		P = append(P, p)
@@ -254,7 +255,7 @@ func (m Module) K(w io.Writer) {
 				node(LocalGet(v[i]), p)
 			}
 		case Return:
-			p = push("ret", p, na, "")
+			p = push("ret", p, na, rtyp)
 			nodes(v, p)
 		case Stmts:
 			if len(v) == 1 {
@@ -394,6 +395,10 @@ func (m Module) K(w io.Writer) {
 		for i, l := range f.Locs {
 			li := push("loc", p, i, typ[l.Type])
 			push("sym", li, i, sym(l.Name))
+		}
+		rtyp = ""
+		if len(f.Rets) == 1 {
+			rtyp = typ[f.Rets[0]]
 		}
 		b := push("ast", p, na, "")
 		for i := range f.Body {

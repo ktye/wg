@@ -372,7 +372,7 @@ func (i If) value() (th Stmts, el Stmts, name string, typ Type, ret bool) {
 	return
 }
 
-// valueStatements tests if multiple statements of an if/else or switch all end with and assigment
+// valueStatements tests if multiple statements of an if/else or switch all end with an assigment
 // to a local variable or a return. The assigment or return can be moved outwards.
 func valueStatements(v []Stmts) (r []Stmts, name string, typ Type, ret bool, ok bool) {
 	las := func(stmts Stmts) (Stmts, string, Type, bool, bool) {
@@ -607,7 +607,7 @@ func nosys(w io.Writer) {
 		"Read":   "(func $Read (param i32) (param i32) (param i32) (result i32) i32.const 0)",
 		"Write":  "(func $Write (param i32) (param i32) (param i32) (param i32) (result i32) i32.const 0)",
 		"ReadIn": "(func $ReadIn (param i32) (param i32) (result i32) i32.const 0)",
-		"Native": "(func $Native (param i64) (param i64) (result i64) i64.const 0)",
+		"Native": "(func $Native (param i64) (param i64) (result i64) i32.const 0)",
 	}
 	for _, s := range strings.Split("Exit Arg Args Read Write ReadIn Native", " ") {
 		if syscalls[s] {
