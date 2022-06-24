@@ -171,6 +171,17 @@ func (m Module) K(w io.Writer) {
 		vars[s] = true
 		return s
 	}
+	singleType := func(v []Stmts) string { // all statements return, (todo: or assign to the same var)
+		for _, st := range v {
+			if len(st) == 0 {
+				return ""
+			}
+			if _, o := st[len(st)-1].(Return); o == false {
+				return ""
+			}
+		}
+		return rtyp
+	}
 	var node func(e Emitter, p int)
 	nodes := func(v []Expr, p int) {
 		for i := range v {
@@ -267,7 +278,8 @@ func (m Module) K(w io.Writer) {
 				}
 			}
 		case If:
-			p = push("cnd", p, na, "")
+			cs := []Stmts{v.Then, v.Else}
+			p = push("cnd", p, na, singleType(cs))
 			node(v.If, p)
 			node(v.Then, p)
 			if len(v.Else) > 0 {
