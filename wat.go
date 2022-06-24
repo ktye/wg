@@ -10,9 +10,12 @@ import (
 
 // convert wg ast to webassembly text format
 
+var NoSys bool
+
 func (m Module) Wat(w io.Writer) {
-	fmt.Fprintf(w, `(module
-(import "env" "Exit"  (func $Exit  (param i32)))
+	fmt.Fprintln(w, "(module")
+	if NoSys == false {
+		fmt.Fprintf(w, `(import "env" "Exit"  (func $Exit  (param i32)))
 (import "env" "Args"  (func $Args  (result i32)))
 (import "env" "Arg"   (func $Arg   (param i32) (param i32) (result i32)))
 (import "env" "Read"  (func $Read  (param i32) (param i32) (param i32) (result i32)))
@@ -20,12 +23,8 @@ func (m Module) Wat(w io.Writer) {
 (import "env" "ReadIn" (func $ReadIn (param i32) (param i32) (result i32)))
 (import "env" "Native" (func $Native (param i64) (param i64) (result i64)))
 `)
+	}
 
-	/*
-		for _, i := range m.Imports {
-			i.wat(w)
-		}
-	*/
 	if TryCatch {
 		// fmt.Fprintln(w, "(tag $panic)") // proposal
 		fmt.Fprintln(w, "(exception_type $panic)") // wavm
@@ -59,23 +58,28 @@ func (m Module) Wat(w io.Writer) {
 		q := strings.Replace(strconv.Quote(d.Data), `\x`, `\`, -1)
 		fmt.Fprintf(w, "(data (i32.const %d) %s)\n", d.Off, q)
 	}
+	syscalls = make(map[string]bool)
 	for _, f := range m.Funcs {
 		f.Exported = m.Exports[f.Name] || m.exportAll
 		f.wat(w)
 	}
-	tmax := 0
-	for _, e := range m.Table {
-		if n := e.Off + len(e.Names); n > tmax {
-			tmax = n
+	nosys(w)
+
+	if len(m.Table) > 1 {
+		tmax := 0
+		for _, e := range m.Table {
+			if n := e.Off + len(e.Names); n > tmax {
+				tmax = n
+			}
 		}
-	}
-	fmt.Fprintf(w, "(table (export \"table\") %d funcref)\n", tmax)
-	for _, e := range m.Table {
-		fmt.Fprintf(w, "(elem (i32.const %d) func", e.Off)
-		for i := range e.Names {
-			fmt.Fprintf(w, " $%s", e.Names[i])
+		fmt.Fprintf(w, "(table (export \"table\") %d funcref)\n", tmax)
+		for _, e := range m.Table {
+			fmt.Fprintf(w, "(elem (i32.const %d) func", e.Off)
+			for i := range e.Names {
+				fmt.Fprintf(w, " $%s", e.Names[i])
+			}
+			fmt.Fprintf(w, ")\n")
 		}
-		fmt.Fprintf(w, ")\n")
 	}
 	fmt.Fprintf(w, ")\n")
 }
@@ -307,6 +311,7 @@ func (c Call) call(w io.Writer) {
 		if simd(c.Func, w) {
 			return
 		}
+		syscall(c.Func)
 
 		// normal function call
 		fmt.Fprintf(w, "call $%s\n", c.Func)
@@ -581,6 +586,34 @@ func init() {
 	// missing:
 	//   i{32,64}.extend_{8,16}_s
 	//   i{32,64}.trunc_sat_f{32,64}_[su]
+}
+
+var syscalls map[string]bool
+
+func syscall(s string) {
+	switch s {
+	case "Exit", "Arg", "Args", "Read", "Write", "ReadIn", "Native":
+		syscalls[s] = true
+	}
+}
+func nosys(w io.Writer) {
+	if NoSys == false {
+		return
+	} // see ./module.go
+	m := map[string]string{
+		"Exit":   "(func $Exit (param i32))",
+		"Arg":    "(func $Arg (param i32) (param i32) (result i32) i32.const 0)",
+		"Args":   "(func $Args (result i32) i32.const 0)",
+		"Read":   "(func $Read (param i32) (param i32) (param i32) (result i32) i32.const 0)",
+		"Write":  "(func $Write (param i32) (param i32) (param i32) (param i32) (result i32) i32.const 0)",
+		"ReadIn": "(func $ReadIn (param i32) (param i32) (result i32) i32.const 0)",
+		"Native": "(func $Native (param i64) (param i64) (result i64) i64.const 0)",
+	}
+	for _, s := range strings.Split("Exit Arg Args Read Write ReadIn Native", " ") {
+		if syscalls[s] {
+			fmt.Fprintln(w, m[s])
+		}
+	}
 }
 
 func optimize(b []byte) (r []byte) {

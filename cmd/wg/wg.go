@@ -24,6 +24,9 @@ func main() {
 	if a0() == "-multi" {
 		wg.MultiMemory, a = true, a[1:]
 	}
+	if a0() == "-nosys" { // wasm-only, no system interface (and no imports)
+		wg.NoSys, a = true, a[1:]
+	}
 	if a0() == "-c" { // C
 		c, a = true, a[1:]
 	}
