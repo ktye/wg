@@ -36,11 +36,11 @@ func main() {
 	if a0() == "-k" {
 		k, a = true, a[1:]
 	}
-	if a0() == "-prefix" { // -c only prefix symbols with a[1]
+	if a0() == "-prefix" { // -c only: prefix symbols with a[1]
 		wg.Prefix = a[1]
 		a = a[2:]
 	}
-	if a0() == "-nomain" { // -c only skip main
+	if a0() == "-nomain" { // -c&wasm: skip main
 		wg.Nomain, a = true, a[1:]
 	}
 	m := wg.Parse(a[0])

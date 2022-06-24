@@ -61,6 +61,9 @@ func (m Module) Wat(w io.Writer) {
 	syscalls = make(map[string]bool)
 	for _, f := range m.Funcs {
 		f.Exported = m.Exports[f.Name] || m.exportAll
+		if f.Name == "main" && Nomain == true {
+			continue
+		}
 		f.wat(w)
 	}
 	nosys(w)
