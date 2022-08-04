@@ -311,9 +311,7 @@ func (c Call) call(w io.Writer) {
 		}
 
 	default:
-		if simd(c.Func, w) {
-			return
-		}
+		// if simd(c.Func, w) { return; }
 		syscall(c.Func)
 
 		// normal function call

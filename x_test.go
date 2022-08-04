@@ -473,6 +473,7 @@ func memcpy(x int32) {
 	Memorycopy(x, x+10, 5)
 }
 
+/*
 // (func $simd (param $x i32) (local $v v128) (local $w v128)
 // local.get $x v128.load local.set $v
 // local.get $x i32x4.splat local.set $w
@@ -491,3 +492,4 @@ func simd(x int32) {
 func simd2(x int32) {
 	I32x4store(x, I32x4load(x).Add(I32x4splat(x)))
 }
+*/

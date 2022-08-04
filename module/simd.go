@@ -1,5 +1,7 @@
 package module
 
+/*
+
 import (
 	"math"
 )
@@ -410,3 +412,4 @@ func (x F64x2) Gt_s(y F64x2) (r F64x2) {
 	}
 	return r
 }
+*/

@@ -1,5 +1,7 @@
 package wg
 
+/*
+
 import (
 	"fmt"
 	"io"
@@ -48,3 +50,4 @@ func simd(x string, w io.Writer) bool {
 	w.Write([]byte(op + "\n"))
 	return true
 }
+*/
