@@ -659,9 +659,6 @@ const chead string = `#include<stdio.h>
 #include<string.h>
 #include<time.h>
 #include<setjmp.h>
-typedef int8_t  i8x16 __attribute__ ((vector_size (16)));
-typedef int32_t i32x4 __attribute__ ((vector_size (16)));
-typedef double  f64x2 __attribute__ ((vector_size (16)));
 #define $F64abs        __builtin_fabs
 #define $F64sqrt       __builtin_sqrt
 #define $F64floor      __builtin_floor
@@ -693,86 +690,6 @@ void $Memorycopy3(int32_t dst, int32_t src, int32_t n){ memcpy( _M+dst, _M2+src,
 void $Memoryfill(int32_t p, int32_t v, int32_t n){ memset(_M+p, (int)v, (size_t)n); }
 int32_t $I32clz(uint32_t x) { return (int32_t)__builtin_clz((unsigned int)x); }
 int32_t $I64popcnt(uint64_t x){ return (int32_t)__builtin_popcountll(x); }
-void i8x16abs(i8x16 *dst, i8x16 src){
- (*dst)[0]=(src[0]<0)?-src[0]:src[0];
- (*dst)[1]=(src[1]<0)?-src[1]:src[1];
- (*dst)[2]=(src[2]<0)?-src[2]:src[2];
- (*dst)[3]=(src[3]<0)?-src[3]:src[3];
- (*dst)[4]=(src[4]<0)?-src[4]:src[4];
- (*dst)[5]=(src[5]<0)?-src[5]:src[5];
- (*dst)[6]=(src[6]<0)?-src[6]:src[6];
- (*dst)[7]=(src[7]<0)?-src[7]:src[7];
- (*dst)[8]=(src[8]<0)?-src[8]:src[8];
- (*dst)[9]=(src[9]<0)?-src[9]:src[9];
- (*dst)[10]=(src[10]<0)?-src[10]:src[10];
- (*dst)[11]=(src[11]<0)?-src[11]:src[11];
- (*dst)[12]=(src[12]<0)?-src[12]:src[12];
- (*dst)[13]=(src[13]<0)?-src[13]:src[13];
- (*dst)[14]=(src[14]<0)?-src[14]:src[14];
- (*dst)[15]=(src[15]<0)?-src[15]:src[15];
-}
-void i32x4abs(i32x4 *dst, i32x4 src){
- (*dst)[0]=(src[0]<0)?-src[0]:src[0];
- (*dst)[1]=(src[1]<0)?-src[1]:src[1];
- (*dst)[2]=(src[2]<0)?-src[2]:src[2];
- (*dst)[3]=(src[3]<0)?-src[3]:src[3];
-}
-void i8x16min_s(i8x16 *r, i8x16 x, i8x16 y){
- (*r)[ 0]=(x[ 0]<y[ 0])?x[ 0]:y[ 0];
- (*r)[ 1]=(x[ 1]<y[ 1])?x[ 1]:y[ 1];
- (*r)[ 2]=(x[ 2]<y[ 2])?x[ 2]:y[ 2];
- (*r)[ 3]=(x[ 3]<y[ 3])?x[ 3]:y[ 3];
- (*r)[ 4]=(x[ 4]<y[ 4])?x[ 4]:y[ 4];
- (*r)[ 5]=(x[ 5]<y[ 5])?x[ 5]:y[ 5];
- (*r)[ 6]=(x[ 6]<y[ 6])?x[ 6]:y[ 6];
- (*r)[ 7]=(x[ 7]<y[ 7])?x[ 7]:y[ 7];
- (*r)[ 8]=(x[ 8]<y[ 8])?x[ 8]:y[ 8];
- (*r)[ 9]=(x[ 9]<y[ 9])?x[ 9]:y[ 9];
- (*r)[10]=(x[10]<y[10])?x[10]:y[10];
- (*r)[11]=(x[11]<y[11])?x[11]:y[11];
- (*r)[12]=(x[12]<y[12])?x[12]:y[12];
- (*r)[13]=(x[13]<y[13])?x[13]:y[13];
- (*r)[14]=(x[14]<y[14])?x[14]:y[14];
- (*r)[15]=(x[15]<y[15])?x[15]:y[15];
-}
-void i32x4min_s(i32x4 *r, i32x4 x, i32x4 y){
- (*r)[ 0]=(x[ 0]<y[ 0])?x[ 0]:y[ 0];
- (*r)[ 1]=(x[ 1]<y[ 1])?x[ 1]:y[ 1];
- (*r)[ 2]=(x[ 2]<y[ 2])?x[ 2]:y[ 2];
- (*r)[ 3]=(x[ 3]<y[ 3])?x[ 3]:y[ 3];
-}
-void f64x2pmin(f64x2 *r, f64x2 x, f64x2 y){
- (*r)[ 0]=(x[ 0]<y[ 0])?x[ 0]:y[ 0];
- (*r)[ 1]=(x[ 1]<y[ 1])?x[ 1]:y[ 1];
-}
-void i8x16max_s(i8x16 *r, i8x16 x, i8x16 y){
- (*r)[ 0]=(x[ 0]>y[ 0])?x[ 0]:y[ 0];
- (*r)[ 1]=(x[ 1]>y[ 1])?x[ 1]:y[ 1];
- (*r)[ 2]=(x[ 2]>y[ 2])?x[ 2]:y[ 2];
- (*r)[ 3]=(x[ 3]>y[ 3])?x[ 3]:y[ 3];
- (*r)[ 4]=(x[ 4]>y[ 4])?x[ 4]:y[ 4];
- (*r)[ 5]=(x[ 5]>y[ 5])?x[ 5]:y[ 5];
- (*r)[ 6]=(x[ 6]>y[ 6])?x[ 6]:y[ 6];
- (*r)[ 7]=(x[ 7]>y[ 7])?x[ 7]:y[ 7];
- (*r)[ 8]=(x[ 8]>y[ 8])?x[ 8]:y[ 8];
- (*r)[ 9]=(x[ 9]>y[ 9])?x[ 9]:y[ 9];
- (*r)[10]=(x[10]>y[10])?x[10]:y[10];
- (*r)[11]=(x[11]>y[11])?x[11]:y[11];
- (*r)[12]=(x[12]>y[12])?x[12]:y[12];
- (*r)[13]=(x[13]>y[13])?x[13]:y[13];
- (*r)[14]=(x[14]>y[14])?x[14]:y[14];
- (*r)[15]=(x[15]>y[15])?x[15]:y[15];
-}
-void i32x4max_s(i32x4 *r, i32x4 x, i32x4 y){
- (*r)[ 0]=(x[ 0]>y[ 0])?x[ 0]:y[ 0];
- (*r)[ 1]=(x[ 1]>y[ 1])?x[ 1]:y[ 1];
- (*r)[ 2]=(x[ 2]>y[ 2])?x[ 2]:y[ 2];
- (*r)[ 3]=(x[ 3]>y[ 3])?x[ 3]:y[ 3];
-}
-void f64x2pmax(f64x2 *r, f64x2 x, f64x2 y){
- (*r)[ 0]=(x[ 0]>y[ 0])?x[ 0]:y[ 0];
- (*r)[ 1]=(x[ 1]>y[ 1])?x[ 1]:y[ 1];
-}
 int32_t Args(){ return args_; }
 int32_t Arg(int32_t i, int32_t r){
  if(i>=args_) return 0;

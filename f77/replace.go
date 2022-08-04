@@ -59,12 +59,12 @@ func init() {
 		return strings.Replace(x, "@", "\n"+h, 1)
 	}
 	r := make(map[string]string)
-	r["mtC"] = do(MTC, "")
-	r["all"] = do(ALL, "")
-	r["any"] = do(ANY, "")
-	r["inC"] = do(INC, "")
-	r["inI"] = do(INI, "")
-	r["not"] = do(NOT, "")
+	//r["mtC"] = do(MTC, "")
+	//r["all"] = do(ALL, "")
+	//r["any"] = do(ANY, "")
+	//r["inC"] = do(INC, "")
+	//r["inI"] = do(INI, "")
+	//r["not"] = do(NOT, "")
 	r["cosin_"] = do(COSIN, "")
 	r["seqi"] = do(SEQI, "")
 	r["fwh"] = do(FWH, "") // *&B
@@ -72,67 +72,71 @@ func init() {
 	r["catch"] = do(CATCH, "")
 
 	// monadic
-	r["negC"] = do(F1C, "-")
-	r["negI"] = do(F1I, "-")
-	r["negF"] = do(F1F, "-")
-	r["absC"] = do(F1C, "ABS")
-	r["absI"] = do(F1I, "ABS")
-	r["absF"] = do(F1F, "ABS")
+	//r["negC"] = do(F1C, "-")
+	//r["negI"] = do(F1I, "-")
+	//r["negF"] = do(F1F, "-")
+	//r["absC"] = do(F1C, "ABS")
+	//r["absI"] = do(F1I, "ABS")
+	//r["absF"] = do(F1F, "ABS")
 	r["sqrF"] = do(SQRF, "")
 
-	// dyadic
-	v := strings.Split("add+ sub- mul* div/", " ")
-	for _, s := range v {
-		op := s[3:]
-		s = s[:3]
-		r[s+"cC"] = do(F2SC, op) // atom-vector
-		r[s+"iI"] = do(F2SI, op)
-		r[s+"fF"] = do(F2SF, op)
-		r[s+"zZ"] = do(F2SZ, op)
-		r[s+"C"] = do(F2C, op) // vector-vector
-		r[s+"I"] = do(F2I, op)
-		r[s+"F"] = do(F2F, op)
-		r[s+"Z"] = do(F2Z, op)
-	}
-
-	r["divIi"] = do(DIVIIS, "")
-
-	// minmax
-	prefix := func(x string, flip bool) string { // r=x!y => r=!(x,y)
-		split := func(s, p string) (string, string) { v := strings.Split(s, p); return v[0], v[1] }
-		v := strings.Split(x, "\n")
-		for i, s := range v {
-			if strings.Index(s, "!") > 0 {
-				a, b := split(s, " = ")
-				d, e := split(b, " ! ")
-				if flip {
-					d, e = e, d
-				}
-				v[i] = a + " = !(" + d + ", " + e + ")"
-			}
+	/*
+		// dyadic
+		v := strings.Split("add+ sub- mul* div/", " ")
+		for _, s := range v {
+			op := s[3:]
+			s = s[:3]
+			r[s+"cC"] = do(F2SC, op) // atom-vector
+			r[s+"iI"] = do(F2SI, op)
+			r[s+"fF"] = do(F2SF, op)
+			r[s+"zZ"] = do(F2SZ, op)
+			r[s+"C"] = do(F2C, op) // vector-vector
+			r[s+"I"] = do(F2I, op)
+			r[s+"F"] = do(F2F, op)
+			r[s+"Z"] = do(F2Z, op)
 		}
-		return strings.Join(v, "\n")
-	}
-	for _, s := range []string{"min", "max"} {
-		q := strings.ToUpper(s)
-		r[s+"cC"] = do(prefix(F2SC, true), q)
-		r[s+"iI"] = do(prefix(F2SI, true), q)
-		r[s+"fF"] = do(prefix(F2SF, true), q)
-		r[s+"C"] = do(prefix(F2C, false), q)
-		r[s+"I"] = do(prefix(F2I, false), q)
-		r[s+"F"] = do(prefix(F2F, false), q)
-	}
 
-	// compare
-	for _, s := range []string{"eq", "lt", "gt"} {
-		q := "." + strings.ToUpper(s) + "."
-		r[s+"cC"] = do(CAVC, q)
-		r[s+"iI"] = do(CAVI, q)
-		r[s+"Cc"] = do(CVAC, q)
-		r[s+"Ii"] = do(CVAI, q)
-		r[s+"C"] = do(CVC, q)
-		r[s+"I"] = do(CVI, q)
-	}
+		r["divIi"] = do(DIVIIS, "")
+
+		// minmax
+		prefix := func(x string, flip bool) string { // r=x!y => r=!(x,y)
+			split := func(s, p string) (string, string) { v := strings.Split(s, p); return v[0], v[1] }
+			v := strings.Split(x, "\n")
+			for i, s := range v {
+				if strings.Index(s, "!") > 0 {
+					a, b := split(s, " = ")
+					d, e := split(b, " ! ")
+					if flip {
+						d, e = e, d
+					}
+					v[i] = a + " = !(" + d + ", " + e + ")"
+				}
+			}
+			return strings.Join(v, "\n")
+		}
+		for _, s := range []string{"min", "max"} {
+			q := strings.ToUpper(s)
+			r[s+"cC"] = do(prefix(F2SC, true), q)
+			r[s+"iI"] = do(prefix(F2SI, true), q)
+			r[s+"fF"] = do(prefix(F2SF, true), q)
+			r[s+"C"] = do(prefix(F2C, false), q)
+			r[s+"I"] = do(prefix(F2I, false), q)
+			r[s+"F"] = do(prefix(F2F, false), q)
+		}
+	*/
+
+	/*
+		// compare
+		for _, s := range []string{"eq", "lt", "gt"} {
+			q := "." + strings.ToUpper(s) + "."
+			r[s+"cC"] = do(CAVC, q)
+			r[s+"iI"] = do(CAVI, q)
+			r[s+"Cc"] = do(CVAC, q)
+			r[s+"Ii"] = do(CVAI, q)
+			r[s+"C"] = do(CVC, q)
+			r[s+"I"] = do(CVI, q)
+		}
+	*/
 
 	// exclude softmath.
 	m := "isnan atan satan xatan expmulti ldexp frexp normalize modabsf pow"
