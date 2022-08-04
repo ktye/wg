@@ -722,7 +722,7 @@ int32_t Write(int32_t file, int32_t nfile, int32_t src, int32_t n){
  char name[512];
  memcpy(name, _M+file, nfile);
  name[nfile] = (char)0;
- FILE *fp = fopen(name, "rb");
+ FILE *fp = fopen(name, "wb");
  if(fp == NULL){ return -1; }
  fwrite(_M+src, 1, n, fp);
  fclose(fp);
