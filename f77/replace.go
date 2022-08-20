@@ -67,7 +67,7 @@ func init() {
 	//r["not"] = do(NOT, "")
 	r["cosin_"] = do(COSIN, "")
 	r["seqi"] = do(SEQI, "")
-	r["fwh"] = do(FWH, "") // *&B
+	//r["fwh"] = do(FWH, "") // *&B
 	r["store"] = do(STORE, "")
 	r["catch"] = do(CATCH, "")
 
