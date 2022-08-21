@@ -8,24 +8,26 @@ import (
 var ( // only for testing
 	Stdout io.Writer = os.Stdout
 	Stdin  io.Reader = os.Stdin
+	Argv   []string  = os.Args
 	Native func(x, y int64) int64
+	Exit   func(x int32) = exit
 )
 
-func Exit(x int32) { os.Exit(int(x)) }
+func exit(x int32) { os.Exit(int(x)) }
 
-func Args() int32 { return int32(len(os.Args)) }
+func Args() int32 { return int32(len(Argv)) }
 
 // Arg(i, 0) => length
 // allocate..
 // Arg(i, dst) => copy
 func Arg(i, r int32) int32 {
-	if i >= int32(len(os.Args)) {
+	if i >= int32(len(Argv)) {
 		return 0
 	}
 	if r == 0 {
-		return int32(len(os.Args[i]))
+		return int32(len(Argv[i]))
 	}
-	copy(Bytes[r:], []byte(os.Args[i]))
+	copy(Bytes[r:], []byte(Argv[i]))
 	return 0
 }
 
