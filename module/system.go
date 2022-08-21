@@ -8,6 +8,7 @@ import (
 var ( // only for testing
 	Stdout io.Writer = os.Stdout
 	Stdin  io.Reader = os.Stdin
+	Native func(x, y int64) int64
 )
 
 func Exit(x int32) { os.Exit(int(x)) }
@@ -69,4 +70,3 @@ func ReadIn(dst, n int32) int32 {
 	}
 	return int32(nr)
 }
-func Native(x, y int64) int64 { return x }
