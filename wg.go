@@ -15,6 +15,7 @@ import (
 
 var TryCatch bool
 var MultiMemory bool
+var Small bool
 var fset *token.FileSet
 var info types.Info
 var pkg *types.Package
@@ -35,6 +36,22 @@ func Parse(path string) Module { // file.go or dir
 			panic("multiple packages in " + path)
 		}
 		for _, p := range pkgs {
+			for name, pp := range p.Files {
+				com := pp.Comments
+				if len(com) > 0 && len(com[0].List) > 0 {
+					c := com[0].List[0]
+					if c.Text == "// +build small" {
+						if Small == false {
+							delete(p.Files, name)
+						}
+					}
+					if c.Text == "// +build !small" {
+						if Small {
+							delete(p.Files, name)
+						}
+					}
+				}
+			}
 			f = ast.MergePackageFiles(p, ast.FilterFuncDuplicates|ast.FilterImportDuplicates)
 		}
 	}
@@ -121,7 +138,8 @@ func (m *Module) parseFuncs(a *ast.File) (r []Func) {
 			m.scopes = catscopes(tf.Scope())
 			ff := m.parseFunc(f)
 			if ff.Name != "init" {
-				r = append(r, m.parseFunc(f))
+				r = append(r, ff)
+				//r = append(r, m.parseFunc(f))
 			}
 		}
 	}
@@ -382,7 +400,11 @@ func (m *Module) parseDecl(d *ast.GenDecl, globalscope int) Stmt {
 	}
 	var r Stmts
 	for _, s := range d.Specs {
-		r = append(r, m.parseDeclSpec(s, globalscope, d.Tok))
+		a := m.parseDeclSpec(s, globalscope, d.Tok)
+		if len(a.Name) == 1 && len(a.Const) == 1 && a.Name[0] == "SMALL" && a.Const[0] == true {
+			continue //skip const SMALL declaration
+		}
+		r = append(r, a)
 	}
 	return r
 }
@@ -477,6 +499,13 @@ func (m *Module) parseBranch(a *ast.BranchStmt, f *For) (r Branch) {
 	return r
 }
 func (m *Module) parseIf(a *ast.IfStmt) (r Stmts) {
+	if x, small := skipsmall(a.Cond); x {
+		if small == Small {
+			return m.parseStmts(a.Body.List)
+		}
+		return nil
+	}
+
 	var i If
 	if a.Init != nil {
 		r = append(r, m.parseStmt(a.Init, nil))
@@ -493,6 +522,19 @@ func (m *Module) parseIf(a *ast.IfStmt) (r Stmts) {
 		}
 	}
 	return append(r, i)
+}
+func skipsmall(a ast.Expr) (bool, bool) {
+	if id, o := a.(*ast.Ident); o && id.Name == "SMALL" { // if SMALL { ... }
+		return true, true
+	}
+	if b, o := a.(*ast.BinaryExpr); o { //
+		if id, o := b.X.(*ast.Ident); o {
+			if id.Name == "SMALL" { // if SMALL == false { ... }
+				return true, false
+			}
+		}
+	}
+	return false, false
 }
 func (m *Module) parseSwitch(a *ast.SwitchStmt) (r Switch) {
 	if a.Init != nil {
