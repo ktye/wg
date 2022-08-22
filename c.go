@@ -706,7 +706,7 @@ int32_t Read(int32_t file, int32_t nfile, int32_t dst){
  memcpy(name, _M+file, nfile);
  name[nfile] = (char)0;
  FILE *fp = fopen(name, "rb");
- if(fp==NULL) return -1;
+ if(fp==NULL){if(filebuf!=NULL)free(filebuf);n=0;return -1;}
  
  fseek(fp, 0, SEEK_END);
  n = ftell(fp);
