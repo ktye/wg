@@ -40,12 +40,12 @@ func Parse(path string) Module { // file.go or dir
 				com := pp.Comments
 				if len(com) > 0 && len(com[0].List) > 0 {
 					c := com[0].List[0]
-					if c.Text == "// +build small" {
+					if c.Text == "//go:build small" {
 						if Small == false {
 							delete(p.Files, name)
 						}
 					}
-					if c.Text == "// +build !small" {
+					if c.Text == "//go:build !small" {
 						if Small {
 							delete(p.Files, name)
 						}
