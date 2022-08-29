@@ -72,3 +72,4 @@ func ReadIn(dst, n int32) int32 {
 	}
 	return int32(nr)
 }
+func Trap(a,b,c int32, d int64) { }
