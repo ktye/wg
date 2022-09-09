@@ -162,6 +162,12 @@ func (m Module) K(w io.Writer) {
 			panic(fmt.Sprintf("literal type nyi: %v", l.Type))
 		}
 	}
+	ib := func(b bool) int {
+		if b {
+			return 1
+		}
+		return 0
+	}
 	sy := func(s string) string { return strings.ReplaceAll(s, ".", "") }
 	sym := func(s string) string { // sym(
 		s = sy(s)
@@ -198,15 +204,30 @@ func (m Module) K(w io.Writer) {
 			if mod == ":" {
 				mod = ""
 			}
-			p = push("asn", p, len(v.Name), mod)
-			for _, s := range v.Name {
-				push("sym", p, na, sy(s))
-			}
-			for i := range v.Name {
-				push("typ", p, na, typ[v.Typs[i]])
-			}
-			for _, e := range v.Expr { // len(v.Expr) is 1 for multi assign: e.g. a, b := f(x)
-				node(e, p)
+			if mod != "" { // modified assignment: 1 symbol, 1 expr
+				glo := ib(v.Glob[0])
+				s := sy(v.Name[0])
+				p = push("asn", p, 1, "")
+				push("sym", p, glo, s)
+				p = push(bi(mod), p, 2, typ[v.Typs[0]])
+				if glo == 1 {
+					push("Get", p, na, s)
+				} else {
+					push("get", p, na, s)
+				}
+				node(v.Expr[0], p)
+			} else if len(v.Expr) > 1 { // multiple expressions n times: 1 to 1 assignment
+				for i, e := range v.Expr {
+					p = push("asn", p, 1, "")
+					push("sym", p, ib(v.Glob[i]), sy(v.Name[i]))
+					node(e, p)
+				}
+			} else { // possibly multiple return values: n symbols <- 1 expr
+				p = push("asn", p, len(v.Name), "")
+				for i, s := range v.Name {
+					push("sym", p, ib(v.Glob[i]), sy(s))
+				}
+				node(v.Expr[0], p)
 			}
 		case Call:
 			m := map[string]string{"I8": "b", "I32": "i", "I64": "j", "F64": "f", "SetI8": "b", "SetI32": "i", "SetI64": "j", "SetF64": "f"}
@@ -406,7 +427,7 @@ func (m Module) K(w io.Writer) {
 		vars = make(map[string]bool)
 		for i, l := range f.Locs {
 			li := push("loc", p, i, typ[l.Type])
-			push("sym", li, i, sym(l.Name))
+			push("sym", li, 0, sym(l.Name))
 		}
 		rtyp = ""
 		if len(f.Rets) == 1 {
