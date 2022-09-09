@@ -217,10 +217,11 @@ func (m Module) K(w io.Writer) {
 				}
 				node(v.Expr[0], p)
 			} else if len(v.Expr) > 1 { // multiple expressions n times: 1 to 1 assignment
+				p = push("stm", p, na, "")
 				for i, e := range v.Expr {
-					p = push("asn", p, 1, "")
-					push("sym", p, ib(v.Glob[i]), sy(v.Name[i]))
-					node(e, p)
+					p1 := push("asn", p, 1, "")
+					push("sym", p1, ib(v.Glob[i]), sy(v.Name[i]))
+					node(e, p1)
 				}
 			} else { // possibly multiple return values: n symbols <- 1 expr
 				p = push("asn", p, len(v.Name), "")
@@ -277,12 +278,10 @@ func (m Module) K(w io.Writer) {
 		case LocalGet:
 			push("get", p, na, sy(string(v))) // later: na->declaration node Arg|Loc
 		case GlobalGets:
-			//p = push("Gts", p, na, "")
 			for i := range v {
 				node(GlobalGet(v[i]), p)
 			}
 		case LocalGets:
-			//p = push("gts", p, na, "")
 			for i := range v {
 				node(LocalGet(v[i]), p)
 			}
