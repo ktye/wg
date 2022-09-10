@@ -310,7 +310,7 @@ func (m Module) K(w io.Writer) {
 			if len(v.Def) > 0 {
 				def = 1
 			}
-			p = push("swc", p, def, "")
+			p = push("swc", p, def, singleType(append(v.Case,v.Def)))
 			node(v.E, p)
 			for _, n := range v.Case {
 				node(n, p)
@@ -414,8 +414,8 @@ func (m Module) K(w io.Writer) {
 	}
 
 	// Funcs
-	for i, f := range m.Funcs {
-		p := push("fun", root, i, f.Name)
+	for _, f := range m.Funcs {
+		p := push("fun", root, ib(f.Exported), f.Name)
 		for i, a := range f.Args {
 			ai := push("arg", p, i, typ[a.Type])
 			push("sym", ai, i, sy(a.Name))
