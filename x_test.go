@@ -297,9 +297,9 @@ func elseif(x int32) int32 {
 	return x
 }
 
-// (func $ifinit (param $x i32) (result i32) (local $n.1 i32)
-// local.get $x local.get $x i32.mul local.tee $n.1 i32.const 0 i32.gt_s
-// if i32.const 0 local.get $n.1 i32.sub return end local.get $x)
+// (func $ifinit (param $x i32) (result i32) (local $n1 i32)
+// local.get $x local.get $x i32.mul local.tee $n1 i32.const 0 i32.gt_s
+// if i32.const 0 local.get $n1 i32.sub return end local.get $x)
 func ifinit(x int32) int32 {
 	if n := x * x; n > 0 {
 		return -n
@@ -327,9 +327,9 @@ func while(n int32) (r int32) {
 	return r
 }
 
-// (func $forloop (param $n i32) (result i32) (local $r i32) (local $i.1 i32)
-// i32.const 0 local.set $i.1 block loop local.get $i.1 local.get $n i32.ge_s br_if 1
-// local.get $r local.get $i.1 i32.add local.set $r local.get $i.1 i32.const 1 i32.add local.set $i.1 br 0 end end local.get $r)
+// (func $forloop (param $n i32) (result i32) (local $r i32) (local $i1 i32)
+// i32.const 0 local.set $i1 block loop local.get $i1 local.get $n i32.ge_s br_if 1
+// local.get $r local.get $i1 i32.add local.set $r local.get $i1 i32.const 1 i32.add local.set $i1 br 0 end end local.get $r)
 func forloop(n int32) (r int32) {
 	for i := int32(0); i < n; i++ {
 		r += i
@@ -368,12 +368,12 @@ func forcontinue(n int32) (r int32) {
 	return r
 }
 
-// (func $forlabel (param $n i32) (result i32) (local $r i32) (local $i.1 i32)
-// i32.const 0 local.set $i.1
-// block $out:1 loop $out:2 local.get $i.1 local.get $n i32.ge_s br_if 1
+// (func $forlabel (param $n i32) (result i32) (local $r i32) (local $i1 i32)
+// i32.const 0 local.set $i1
+// block $out:1 loop $out:2 local.get $i1 local.get $n i32.ge_s br_if 1
 // block loop local.get $r i32.const 5 i32.eq if br $out:1 end
 // local.get $r   i32.const 1 i32.add local.set $r br 0 end end
-// local.get $i.1 i32.const 1 i32.add local.set $i.1 br 0 end end local.get $r)
+// local.get $i1 i32.const 1 i32.add local.set $i1 br 0 end end local.get $r)
 func forlabel(n int32) (r int32) {
 out:
 	for i := int32(0); i < n; i++ {
@@ -442,11 +442,11 @@ func switchret(x int32) int32 {
 	}
 }
 
-// (func $scope (result i32) (local $i i32) (local $i.1 i32)
+// (func $scope (result i32) (local $i i32) (local $i1 i32)
 // i32.const 1 local.set $i
-// i32.const 0 local.set $i.1
-// block loop local.get $i.1 i32.const 5 i32.ge_s br_if 1
-// local.get $i.1 i32.const 1 i32.add local.set $i.1 br 0 end end local.get $i)
+// i32.const 0 local.set $i1
+// block loop local.get $i1 i32.const 5 i32.ge_s br_if 1
+// local.get $i1 i32.const 1 i32.add local.set $i1 br 0 end end local.get $i)
 func scope() int32 {
 	i := int32(1)
 	for i := int32(0); i < 5; i++ {
@@ -454,9 +454,9 @@ func scope() int32 {
 	return i
 }
 
-// (func $scopevar (param $x i32) (result i32) (local $i.2 i32)
-// local.get $x i32.const 0 i32.gt_s if i32.const 0 local.set $i.2
-// local.get $x i32.const 0 i32.lt_s if local.get $i.2 local.set $x end end local.get $x)
+// (func $scopevar (param $x i32) (result i32) (local $i2 i32)
+// local.get $x i32.const 0 i32.gt_s if i32.const 0 local.set $i2
+// local.get $x i32.const 0 i32.lt_s if local.get $i2 local.set $x end end local.get $x)
 func scopevar(x int32) int32 {
 	if x > 0 {
 		var i int32 = 0

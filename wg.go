@@ -572,7 +572,7 @@ func (m *Module) lookup(s *types.Scope) string {
 			if i == 0 {
 				break
 			}
-			return "." + strconv.Itoa(i)
+			return strconv.Itoa(i)
 		}
 	}
 	return ""

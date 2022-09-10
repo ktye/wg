@@ -415,6 +415,7 @@ func (m Module) K(w io.Writer) {
 
 	// Funcs
 	for _, f := range m.Funcs {
+                f.Exported = m.Exports[f.Name] || m.exportAll
 		p := push("fun", root, ib(f.Exported), f.Name)
 		for i, a := range f.Args {
 			ai := push("arg", p, i, typ[a.Type])

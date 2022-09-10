@@ -233,7 +233,7 @@ func (b Binary) wat(w io.Writer) {
 	fmt.Fprintln(w, op)
 }
 func (l Literal) wat(w io.Writer) {
-	s := l.Value
+	s := strings.ToLower(l.Value)
 	fmt.Fprintf(w, "%s.const %s\n", l.Type, s)
 }
 func (c Call) wat(w io.Writer) {
@@ -338,10 +338,11 @@ func (i If) wat(w io.Writer) {
 		typ = w.(fw).f.Rets[0]
 	}
 	i.If.wat(w)
-	fmt.Fprintln(w, "if")
+	fmt.Fprint(w, "if")
 	if typ != "" {
-		fmt.Fprintf(w, "(result %s)\n", typ)
+		fmt.Fprintf(w, " (result %s)", typ)
 	}
+	fmt.Fprintln(w)
 	for _, t := range th {
 		t.wat(w)
 	}
@@ -420,10 +421,11 @@ func (s Switch) wat(w io.Writer) {
 		typ = w.(fw).f.Rets[0]
 	}
 	for i := 0; i < 2+len(cs); i++ {
-		fmt.Fprintln(w, "block")
+		fmt.Fprint(w, "block")
 		if typ != "" && i == 0 {
-			fmt.Fprintf(w, "(result %s)\n", typ)
+			fmt.Fprintf(w, " (result %s)", typ)
 		}
+		fmt.Fprintln(w)
 	}
 	s.E.wat(w)
 	t := "br_table"
@@ -470,10 +472,10 @@ func (f For) wat(w io.Writer) {
 	}
 	l1, l2 := "", ""
 	if f.Label != "" {
-		l1, l2 = "$"+f.Label+":1", "$"+f.Label+":2"
+		l1, l2 = " $"+f.Label+":1", " $"+f.Label+":2"
 	}
-	fmt.Fprintf(w, "block %s\n", l1)
-	fmt.Fprintf(w, "loop %s\n", l2)
+	fmt.Fprintf(w, "block%s\n", l1)
+	fmt.Fprintf(w, "loop%s\n", l2)
 	if f.Cond != nil {
 		f.Cond.wat(w)
 		fmt.Fprintf(w, "i32.eqz\nbr_if 1\n")
@@ -706,7 +708,7 @@ func indent(w []string) []string {
 		}
 		b := strings.Repeat(" ", l)
 		w[i] = b + s
-		if s == "if" || s == "else" || strings.HasPrefix(s, "block") || strings.HasPrefix(s, "loop") || strings.HasPrefix(s, "try") || strings.HasPrefix(s, "catch_all") {
+		if strings.HasPrefix(s, "if") || s == "else" || strings.HasPrefix(s, "block") || strings.HasPrefix(s, "loop") || strings.HasPrefix(s, "try") || strings.HasPrefix(s, "catch_all") {
 			l++
 		}
 	}
