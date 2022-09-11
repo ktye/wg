@@ -57,6 +57,9 @@ func (m Module) Wat(w io.Writer) {
 					v = "(mut " + v + ")"
 				}
 				if consts == g.Const[i] {
+					if t == "f64" {
+						u = fstring(u)
+					}
 					fmt.Fprintf(w, "(global $%s %s (%s.const %s))\n", s, v, t, u)
 				}
 			}
@@ -263,6 +266,9 @@ func (b Binary) wat(w io.Writer) {
 }
 func (l Literal) wat(w io.Writer) {
 	s := strings.ToLower(l.Value)
+	if l.Type == "f64" {
+		s = fstring(s)
+	}
 	fmt.Fprintf(w, "%s.const %s\n", l.Type, s)
 }
 func (c Call) wat(w io.Writer) {
@@ -647,6 +653,13 @@ func nosys(w io.Writer) {
 			fmt.Fprintln(w, m[s])
 		}
 	}
+}
+func fstring(s string) string {
+	f, e := strconv.ParseFloat(s, 64)
+	if e != nil {
+		panic(e)
+	}
+	return fmt.Sprintf("%v", f)
 }
 
 func optimize(b []byte) (r []byte) {
