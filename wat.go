@@ -30,29 +30,36 @@ func (m Module) Wat(w io.Writer) {
 		fmt.Fprintln(w, "(exception_type $panic)") // wavm
 	}
 	if m.Memory != "" {
-		fmt.Fprintf(w, "(memory $a (export \"memory\") %s)\n", m.Memory)
+		s := ""
+		if m.Memory2 != "" && MultiMemory {
+			s = " $a"
+		}
+		fmt.Fprintf(w, "(memory%s (export \"memory\") %s)\n", s, m.Memory)
 	}
 	if m.Memory2 != "" && MultiMemory {
 		fmt.Fprintf(w, "(memory $b %s)\n", m.Memory2)
 	}
-	for _, g := range m.Globals {
-		for i, s := range g.Name {
-			t := g.Typs[i]
-			var u string
-			switch v := g.Expr[i].(type) {
-			case Cast:
-				u = v.Arg.(Literal).Value
-			case Literal:
-				u = v.Value
-			default:
-				panic("global value must be (cast-to) literal")
+	for _, consts := range []bool{true, false} {
+		for _, g := range m.Globals {
+			for i, s := range g.Name {
+				t := g.Typs[i]
+				var u string
+				switch v := g.Expr[i].(type) {
+				case Cast:
+					u = v.Arg.(Literal).Value
+				case Literal:
+					u = v.Value
+				default:
+					panic("global value must be (cast-to) literal")
+				}
+				v := t.String()
+				if g.Const[i] == false {
+					v = "(mut " + v + ")"
+				}
+				if consts == g.Const[i] {
+					fmt.Fprintf(w, "(global $%s %s (%s.const %s))\n", s, v, t, u)
+				}
 			}
-			mut := t.String()
-			if g.Const[i] == false {
-				mut = "(mut " + t.String() + ")"
-			}
-			//fmt.Fprintf(w, "(global $%s (export \"%s\") %s (%s.const %s))\n", s, s, mut, t, u)
-			fmt.Fprintf(w, "(global $%s %s (%s.const %s))\n", s, mut, t, u)
 		}
 	}
 	for _, d := range m.Data {
@@ -77,10 +84,20 @@ func (m Module) Wat(w io.Writer) {
 			}
 		}
 		fmt.Fprintf(w, "(table (export \"table\") %d funcref)\n", tmax)
-		for _, e := range m.Table {
-			fmt.Fprintf(w, "(elem (i32.const %d) func", e.Off)
-			for i := range e.Names {
-				fmt.Fprintf(w, " $%s", e.Names[i])
+		var off []int
+		var nam [][]string
+		for i, e := range m.Table {
+			if i == 0 || e.Off != off[len(off)-1]+len(nam[len(nam)-1]) {
+				off = append(off, e.Off)
+				nam = append(nam, e.Names)
+			} else { //merge continuous
+				nam[len(nam)-1] = append(nam[len(nam)-1], e.Names...)
+			}
+		}
+		for i, o := range off {
+			fmt.Fprintf(w, "(elem (i32.const %d) func", o)
+			for j := range nam[i] {
+				fmt.Fprintf(w, " $%s", nam[i][j])
 			}
 			fmt.Fprintf(w, ")\n")
 		}
@@ -166,6 +183,18 @@ func (a Assign) wat(w io.Writer) {
 			Y:  a.Expr[0],
 			Op: Op{Name: strings.TrimSuffix(a.Mod, "="), Type: a.Typs[0]},
 		}}
+	}
+	if n := len(a.Name); n > 0 && n == len(a.Expr) { // a,b,c=x,y,z
+		for i := 0; i < n; i++ {
+			a.Expr[i].wat(w)
+			s := a.Name[i]
+			if a.Glob[i] {
+				fmt.Fprintf(w, "global.set $%s\n", s)
+			} else {
+				fmt.Fprintf(w, "local.set $%s\n", s)
+			}
+		}
+		return
 	}
 	for _, e := range a.Expr {
 		e.wat(w)

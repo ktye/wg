@@ -180,7 +180,7 @@ func varassign(x int32) int32 {
 }
 
 // (func $varassign2 (param $x i32) (result i32) (local $a i32) (local $b i32)
-// local.get $x i32.const 2 local.get $x i32.mul local.set $b local.tee $a local.get $b i32.sub)
+// local.get $x local.set $a i32.const 2 local.get $x i32.mul local.set $b local.get $a local.get $b i32.sub)
 func varassign2(x int32) int32 {
 	var a, b int32 = x, 2 * x
 	return a - b
