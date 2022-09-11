@@ -13,6 +13,7 @@ import (
 )
 
 func (m Module) K(w io.Writer) {
+	var current Func
 	const na int = -1 << 31
 	var C []uint64
 	var D []byte
@@ -177,17 +178,6 @@ func (m Module) K(w io.Writer) {
 		vars[s] = true
 		return s
 	}
-	singleType := func(v []Stmts) string { // all statements return, (todo: or assign to the same var)
-		for _, st := range v {
-			if len(st) == 0 {
-				return ""
-			}
-			if _, o := st[len(st)-1].(Return); o == false {
-				return ""
-			}
-		}
-		return rtyp
-	}
 	var node func(e Emitter, p int)
 	nodes := func(v []Expr, p int) {
 		for i := range v {
@@ -298,8 +288,12 @@ func (m Module) K(w io.Writer) {
 				}
 			}
 		case If:
-			cs := []Stmts{v.Then, v.Else}
-			p = push("cnd", p, na, singleType(cs))
+			//cs := []Stmts{v.Then, v.Else}
+			_, _, _, t, ret := v.value()
+			if ret {
+				t = current.Rets[0]
+			}
+			p = push("cnd", p, na, typ[t])
 			node(v.If, p)
 			node(v.Then, p)
 			if len(v.Else) > 0 {
@@ -310,7 +304,11 @@ func (m Module) K(w io.Writer) {
 			if len(v.Def) > 0 {
 				def = 1
 			}
-			p = push("swc", p, def, singleType(append(v.Case, v.Def)))
+			_, _, _, t, ret := v.value()
+			if ret {
+				t = current.Rets[0]
+			}
+			p = push("swc", p, def, typ[t])
 			node(v.E, p)
 			for _, n := range v.Case {
 				node(n, p)
@@ -415,6 +413,7 @@ func (m Module) K(w io.Writer) {
 
 	// Funcs
 	for _, f := range m.Funcs {
+		current = f
 		f.Exported = m.Exports[f.Name] || m.exportAll
 		p := push("fun", root, ib(f.Exported), f.Name)
 		for i, a := range f.Args {
