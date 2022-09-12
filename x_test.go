@@ -370,8 +370,8 @@ func forcontinue(n int32) (r int32) {
 
 // (func $forlabel (param $n i32) (result i32) (local $r i32) (local $i1 i32)
 // i32.const 0 local.set $i1
-// block $out:1 loop $out:2 local.get $i1 local.get $n i32.ge_s br_if 1
-// block loop local.get $r i32.const 5 i32.eq if br $out:1 end
+// block $out1 loop $out0 local.get $i1 local.get $n i32.ge_s br_if 1
+// block loop local.get $r i32.const 5 i32.eq if br $out1 end
 // local.get $r   i32.const 1 i32.add local.set $r br 0 end end
 // local.get $i1 i32.const 1 i32.add local.set $i1 br 0 end end local.get $r)
 func forlabel(n int32) (r int32) {

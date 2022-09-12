@@ -288,33 +288,44 @@ func (m Module) K(w io.Writer) {
 				}
 			}
 		case If:
-			//cs := []Stmts{v.Then, v.Else}
-			_, _, _, t, ret := v.value()
+			th, el, name, t, ret := v.value()
 			if ret {
 				t = current.Rets[0]
+			}
+			if t != "" {
+				if ret {
+					p = push("ret", p, na, typ[t])
+				} else {
+					p = push("asn", p, 1, "")
+					push("sym", p, 0, name)
+				}
 			}
 			p = push("cnd", p, na, typ[t])
 			node(v.If, p)
-			node(v.Then, p)
-			if len(v.Else) > 0 {
-				node(v.Else, p)
+			node(th, p)
+			if len(el) > 0 {
+				node(el, p)
 			}
 		case Switch:
-			def := 0
-			if len(v.Def) > 0 {
-				def = 1
-			}
-			_, _, _, t, ret := v.value()
+			cs, de, name, t, ret := v.value()
 			if ret {
 				t = current.Rets[0]
 			}
-			p = push("swc", p, def, typ[t])
+			if t != "" {
+				if ret {
+					p = push("ret", p, na, typ[t])
+				} else {
+					p = push("asn", p, 1, "")
+					push("sym", p, 0, name)
+				}
+			}
+			p = push("swc", p, ib(len(de) > 0), typ[t])
 			node(v.E, p)
-			for _, n := range v.Case {
+			for _, n := range cs {
 				node(n, p)
 			}
-			if len(v.Def) > 0 {
-				node(v.Def, p)
+			if len(de) > 0 {
+				node(de, p)
 			}
 		case For:
 			simple := 0

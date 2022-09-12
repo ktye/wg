@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -56,10 +57,8 @@ func (m Module) Wat(w io.Writer) {
 				if g.Const[i] == false {
 					v = "(mut " + v + ")"
 				}
+				t, u = conststr(t, u)
 				if consts == g.Const[i] {
-					if t == "f64" {
-						u = fstring(u)
-					}
 					fmt.Fprintf(w, "(global $%s %s (%s.const %s))\n", s, v, t, u)
 				}
 			}
@@ -135,10 +134,6 @@ type fw struct {
 
 func (f Func) wat(w io.Writer) {
 	name := f.Name
-	if name == "main" {
-		name = "_start"
-		f.Exported = true
-	}
 	fmt.Fprintf(w, "(func $%s", name)
 	if f.Exported {
 		fmt.Fprintf(w, " (export \"%s\")", name)
@@ -266,9 +261,7 @@ func (b Binary) wat(w io.Writer) {
 }
 func (l Literal) wat(w io.Writer) {
 	s := strings.ToLower(l.Value)
-	if l.Type == "f64" {
-		s = fstring(s)
-	}
+	l.Type, s = conststr(l.Type, s)
 	fmt.Fprintf(w, "%s.const %s\n", l.Type, s)
 }
 func (c Call) wat(w io.Writer) {
@@ -507,7 +500,7 @@ func (f For) wat(w io.Writer) {
 	}
 	l1, l2 := "", ""
 	if f.Label != "" {
-		l1, l2 = " $"+f.Label+":1", " $"+f.Label+":2"
+		l1, l2 = " $"+f.Label+"1", " $"+f.Label+"0"
 	}
 	fmt.Fprintf(w, "block%s\n", l1)
 	fmt.Fprintf(w, "loop%s\n", l2)
@@ -551,9 +544,9 @@ func (b Branch) wat(w io.Writer) {
 	} else {
 		l := "$" + b.Label
 		if b.Break {
-			l += ":1"
+			l += "1"
 		} else {
-			l += ":2"
+			l += "0"
 		}
 		fmt.Fprintf(w, "br %s\n", l)
 	}
@@ -654,12 +647,49 @@ func nosys(w io.Writer) {
 		}
 	}
 }
-func fstring(s string) string {
-	f, e := strconv.ParseFloat(s, 64)
-	if e != nil {
-		panic(e)
+func conststr(t Type, s string) (Type, string) {
+	switch t {
+	case I32:
+		var i int32
+		if _, e := fmt.Sscan(s, &i); e != nil {
+			panic(e)
+		}
+		return t, fmt.Sprintf("%v", i)
+	case U32:
+		var i uint32
+		if _, e := fmt.Sscan(s, &i); e != nil {
+			panic(e)
+		}
+		return t, fmt.Sprintf("%v", int32(i))
+	case I64:
+		var i int64
+		if _, e := fmt.Sscan(s, &i); e != nil {
+			panic(e)
+		}
+		if i < math.MinInt32 || i > math.MaxInt32 {
+			return t, fmt.Sprintf("0x%016x", uint64(i))
+		} else {
+			return t, fmt.Sprintf("%v", i)
+		}
+	case U64:
+		var i uint64
+		if _, e := fmt.Sscan(s, &i); e != nil {
+			panic(e)
+		}
+		if int64(i) < math.MinInt32 || int64(i) > math.MaxInt32 {
+			return t, fmt.Sprintf("0x%016x", i)
+		} else {
+			return t, fmt.Sprintf("%v", int64(i))
+		}
+	case "f64":
+		f, e := strconv.ParseFloat(s, 64)
+		if e != nil {
+			panic(e)
+		}
+		return t, fmt.Sprintf("%v", f)
+	default:
+		return t, s
 	}
-	return fmt.Sprintf("%v", f)
 }
 
 func optimize(b []byte) (r []byte) {
