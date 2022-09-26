@@ -107,26 +107,6 @@ func (m Module) K(w io.Writer) {
 		C = append(C, u)
 		return 8 * (len(C) - 1)
 	}
-	floatdata := func(f float64) { // append the string form in 8 or 16 bytes padded with space
-		s := strconv.FormatFloat(f, 'g', -1, 64)
-		pad, n := 8-len(s), 1
-		if pad <= 0 {
-			pad = 16 - len(s)
-			n++
-		}
-		if pad <= 0 {
-			pad = 24 - len(s)
-			n++
-		}
-		if pad <= 0 {
-			panic("long float literal: " + s)
-		}
-		s += strings.Repeat(" ", pad)
-		b := []byte(s)
-		for i := 0; i < n; i++ {
-			C = append(C, binary.LittleEndian.Uint64(b[8*i:]))
-		}
-	}
 	literal := func(l Literal) int {
 		switch l.Type {
 		case I32, U32:
@@ -158,7 +138,6 @@ func (m Module) K(w io.Writer) {
 			f, e := strconv.ParseFloat(l.Value, 64)
 			fatal(e)
 			r := data(math.Float64bits(f))
-			floatdata(f)
 			return r
 		default:
 			panic(fmt.Sprintf("literal type nyi: %v", l.Type))
