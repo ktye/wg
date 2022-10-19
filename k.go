@@ -14,7 +14,6 @@ import (
 
 func (m Module) K(w io.Writer) {
 	var current Func
-	defnode := make(map[string]int) // varname to definition node
 	const na int = -1 << 31
 	var C []uint64
 	var D []byte
@@ -244,10 +243,10 @@ func (m Module) K(w io.Writer) {
 		case Literal:
 			push("lit", p, literal(v), typ[v.Type])
 		case GlobalGet:
-			push("Get", p, defnode[string(v)], string(v))
+			push("Get", p, na, string(v))
 		case LocalGet:
 			s := sy(string(v))
-			push("get", p, defnode[s], s)
+			push("get", p, na, s)
 		case GlobalGets:
 			for i := range v {
 				node(GlobalGet(v[i]), p)
@@ -380,7 +379,6 @@ func (m Module) K(w io.Writer) {
 			}
 			t := a.Typs[i]
 			g := push(v, root, na, s)
-			defnode[s] = g
 			l := a.Expr[i].(Literal)
 			l.Type = t // overwrite literal type (which maybe wrong)
 			node(l, g)
@@ -412,7 +410,6 @@ func (m Module) K(w io.Writer) {
 		for i, a := range f.Args {
 			ai := push("arg", p, i, typ[a.Type])
 			push("sym", ai, i, sy(a.Name))
-			defnode[sy(a.Name)] = ai
 		}
 		for i, r := range f.Rets {
 			push("res", p, i, typ[r])
@@ -422,7 +419,6 @@ func (m Module) K(w io.Writer) {
 			li := push("loc", p, i, typ[l.Type])
 			s := sym(l.Name)
 			push("sym", li, 0, s)
-			defnode[s] = li
 		}
 		rtyp = ""
 		if len(f.Rets) == 1 {
