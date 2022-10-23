@@ -218,11 +218,11 @@ func (m Module) K(w io.Writer) {
 			for _, a := range v.Args {
 				node(a, p)
 			}
-			for i, t := range v.ArgType {
-				push("arg", p, i, typ[t])
+			for _, t := range v.ArgType {
+				push("arg", p, na, typ[t])
 			}
-			for i, t := range v.ResType {
-				push("res", p, i, typ[t])
+			for _, t := range v.ResType {
+				push("res", p, na, typ[t])
 			}
 		case Cast:
 			p = push("cst", p, na, typ[v.Dst])
@@ -407,16 +407,16 @@ func (m Module) K(w io.Writer) {
 		current = f
 		f.Exported = m.Exports[f.Name] || m.exportAll
 		p := push("fun", root, ib(f.Exported), f.Name)
-		for i, a := range f.Args {
-			ai := push("arg", p, i, typ[a.Type])
-			push("sym", ai, i, sy(a.Name))
+		for _, a := range f.Args {
+			ai := push("arg", p, na, typ[a.Type])
+			push("sym", ai, 0, sy(a.Name))
 		}
-		for i, r := range f.Rets {
-			push("res", p, i, typ[r])
+		for _, r := range f.Rets {
+			push("res", p, na, typ[r])
 		}
 		vars = make(map[string]bool)
-		for i, l := range f.Locs {
-			li := push("loc", p, i, typ[l.Type])
+		for _, l := range f.Locs {
+			li := push("loc", p, na, typ[l.Type])
 			s := sym(l.Name)
 			push("sym", li, 0, s)
 		}
