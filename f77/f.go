@@ -617,7 +617,7 @@ func assign(a wg.Assign) {
 		}
 		switch a.Mod {
 		case ":=", "=", "":
-		case "+=", "-=", "*=", "/=", ">>=", "^=", "|=":
+		case "+=", "-=", "*=", "/=", ">>=", "^=", "|=", "&^=":
 			mod = strings.TrimSuffix(a.Mod, "=")
 			if mod == ">>" && (a.Typs[i] == wg.I32 || a.Typs[i] == wg.I64) {
 				mod = ">>U"
@@ -647,6 +647,8 @@ func assign(a wg.Assign) {
 			r, o := m[mod]
 			if o {
 				fmt.Fprintf(w, "%s = %s(%s,%s)\n", s, r, s, x)
+			} else if mod == "&^" {
+				fmt.Fprintf(w, "%s = IAND(%s,NOT(%s))\n", s, s, x)
 			} else {
 				fmt.Fprintf(w, "%s = %s %s %s\n", s, s, mod, x)
 			}

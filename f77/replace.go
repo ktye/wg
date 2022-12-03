@@ -54,6 +54,7 @@ func init() {
 			panic("no header but anchor: " + x)
 		}
 		if h != "" && strings.Index(x, "@") < 0 {
+			println("header", h)
 			panic("no anchor but header: " + x)
 		}
 		return strings.Replace(x, "@", "\n"+h, 1)
@@ -180,10 +181,12 @@ IF(? .GT. 0) ? = Y + 4*(?-1)`
 const NOT = `SUBROUTINE ?(X,R,E)
 i X,E,R@
 cc(1+R:E) = IAND(INT(1,1),NOT(cc(1+X:X+E-R)))`
-const COSIN = `SUBROUTINE ?(X,C,S)
-f X,C,S
-C = COS(X)
-S = SIN(X)`
+const COSIN = `SUBROUTINE ?(X,R,CS)
+i R,CS
+f X@
+ff(1+R/8) = COS(X)
+IF(CS .EQ. 0) ff(2+R/8) = SIN(X)
+IF(CS .EQ. 1) ff(1+R/8) = SIN(X)`
 const SEQI = `SUBROUTINE ?(P,E)
 i P,E,R@
 R = P/4
