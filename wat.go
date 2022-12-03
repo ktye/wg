@@ -12,18 +12,8 @@ import (
 // convert wg ast to webassembly text format
 
 var NoSys bool
-var Single bool
 
 func (m Module) Wat(w io.Writer) {
-	if Single {
-		for _, f := range m.Funcs {
-			if len(f.Rets) > 1 {
-				fmt.Println(f.Name, f.Rets)
-			}
-		}
-		return
-	}
-
 	fmt.Fprintln(w, "(module")
 	if NoSys == false {
 		fmt.Fprintf(w, `(import "env" "Exit"  (func $Exit  (param i32)))
