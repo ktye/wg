@@ -213,16 +213,17 @@ func (m Module) K(w io.Writer) {
 			}
 			nodes(v.Args, p)
 		case CallIndirect:
-			p = push("cli", p, len(v.Args), "")
+			rt := ""
+			if len(v.ResType) == 1 {
+				rt = typ[v.ResType[0]]
+			}
+			p = push("cli", p, len(v.Args), rt)
 			node(v.Func, p)
 			for _, a := range v.Args {
 				node(a, p)
 			}
 			for _, t := range v.ArgType {
 				push("arg", p, na, typ[t])
-			}
-			for _, t := range v.ResType {
-				push("res", p, na, typ[t])
 			}
 		case Cast:
 			p = push("cst", p, na, typ[v.Dst])
