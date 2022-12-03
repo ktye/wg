@@ -27,6 +27,9 @@ func main() {
 	if a0() == "-nosys" { // wasm-only, no system interface (and no imports)
 		wg.NoSys, a = true, a[1:]
 	}
+	if a0() == "-single" {
+		wg.Single, a = true, a[1:]
+	}
 	if a0() == "-c" { // C
 		c, a = true, a[1:]
 	}
