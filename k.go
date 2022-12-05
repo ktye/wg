@@ -176,8 +176,7 @@ func (m Module) K(w io.Writer) {
 			if mod != "" { // modified assignment: 1 symbol, 1 expr
 				glo := ib(v.Glob[0])
 				s := sy(v.Name[0])
-				p = push("asn", p, 1, "")
-				push("sym", p, glo, s)
+				p = push("asn", p, glo, s)
 				p = push(bi(mod), p, 2, typ[v.Typs[0]])
 				if glo == 1 {
 					push("Get", p, na, s)
@@ -188,15 +187,14 @@ func (m Module) K(w io.Writer) {
 			} else if len(v.Expr) > 1 { // multiple expressions n times: 1 to 1 assignment
 				p = push("stm", p, na, "")
 				for i, e := range v.Expr {
-					p1 := push("asn", p, 1, "")
-					push("sym", p1, ib(v.Glob[i]), sy(v.Name[i]))
+					p1 := push("asn", p, ib(v.Glob[i]), sy(v.Name[i]))
 					node(e, p1)
 				}
 			} else { // possibly multiple return values: n symbols <- 1 expr
-				p = push("asn", p, len(v.Name), "")
-				for i, s := range v.Name {
-					push("sym", p, ib(v.Glob[i]), sy(s))
+				if len(v.Name) != 1 {
+					panic("multi-assign")
 				}
+				p = push("asn", p, ib(v.Glob[0]), sy(v.Name[0]))
 				node(v.Expr[0], p)
 			}
 		case Call:
