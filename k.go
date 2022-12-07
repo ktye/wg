@@ -275,8 +275,7 @@ func (m Module) K(w io.Writer) {
 				if ret {
 					p = push("ret", p, na, typ[t])
 				} else {
-					p = push("asn", p, 1, "")
-					push("sym", p, 0, name)
+					p = push("asn", p, 1, name)
 				}
 			}
 			p = push("cnd", p, na, typ[t])
@@ -294,8 +293,7 @@ func (m Module) K(w io.Writer) {
 				if ret {
 					p = push("ret", p, na, typ[t])
 				} else {
-					p = push("asn", p, 1, "")
-					push("sym", p, 0, name)
+					p = push("asn", p, 1, name)
 				}
 			}
 			p = push("swc", p, ib(len(de) > 0), typ[t])
