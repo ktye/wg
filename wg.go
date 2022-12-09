@@ -222,18 +222,18 @@ func parseTypes(a ast.Expr) (names []string, rtype []Type) {
 	return f("", info.TypeOf(a).Underlying())
 }
 
-//func parseSimdType(a *types.Array, pos string) Type {
-//	switch a.String() {
-//	case "[16]int8":
-//		return I8x16
-//	case "[4]int32":
-//		return I32x4
-//	case "[2]float64":
-//		return F64x2
-//	default:
-//		panic(pos + ": unknown vector type: " + a.String())
+//	func parseSimdType(a *types.Array, pos string) Type {
+//		switch a.String() {
+//		case "[16]int8":
+//			return I8x16
+//		case "[4]int32":
+//			return I32x4
+//		case "[2]float64":
+//			return F64x2
+//		default:
+//			panic(pos + ": unknown vector type: " + a.String())
+//		}
 //	}
-//}
 func (m *Module) parseSignature(a ast.Expr) (arg, res []Type) {
 	p := position(a)
 	t := info.TypeOf(a).Underlying().(*types.Signature)
@@ -345,7 +345,7 @@ func (m *Module) parseStmt(st ast.Stmt, f *For) Stmt {
 			if c.Func != "Catch" {
 				panic(position(v) + ":defer function must be 'Catch'")
 			}
-			m.current.Defer = Call{Func: string(c.Args[0].(GlobalGets)[0])}
+			m.current.Defer = Call{Func: string(c.Args[0].(GlobalGets)[0]), a: v}
 		}
 		return Nop{}
 	default:
@@ -591,24 +591,24 @@ func (m *Module) varname(a ast.Node) string {
 	}
 }
 
-//func (m *Module) parseSimdMethod(a ast.Node, argv []ast.Expr) Expr {
-//	if v, o := a.(*ast.SelectorExpr); o {
-//		if vt, o := info.TypeOf(v.X).Underlying().(*types.Array); o {
-//			st := parseSimdType(vt, position(a))
-//			str := string(st)
-//			recv := m.parseExpr(v.X)
-//			args := []Expr{recv}
-//			for i := range argv {
-//				args = append(args, m.parseExpr(argv[i]))
-//			}
-//			return Call{
-//				Func: fmt.Sprintf("%s.%s", str, v.Sel.Name),
-//				Args: args,
+//	func (m *Module) parseSimdMethod(a ast.Node, argv []ast.Expr) Expr {
+//		if v, o := a.(*ast.SelectorExpr); o {
+//			if vt, o := info.TypeOf(v.X).Underlying().(*types.Array); o {
+//				st := parseSimdType(vt, position(a))
+//				str := string(st)
+//				recv := m.parseExpr(v.X)
+//				args := []Expr{recv}
+//				for i := range argv {
+//					args = append(args, m.parseExpr(argv[i]))
+//				}
+//				return Call{
+//					Func: fmt.Sprintf("%s.%s", str, v.Sel.Name),
+//					Args: args,
+//				}
 //			}
 //		}
+//		return nil
 //	}
-//	return nil
-//}
 func parseLiteral(a *ast.BasicLit, xt types.Type) (r Literal) {
 	var t Type
 	if b, o := info.TypeOf(a).(*types.Basic); o && (b.Kind() == types.UntypedInt || b.Kind() == types.Uint || b.Kind() == types.Int) && xt != nil {
@@ -649,7 +649,7 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 		return r
 	}
 	if ic, o := a.Fun.(*ast.TypeAssertExpr); o {
-		return m.parseCallIndirect(ic, a.Args)
+		return m.parseCallIndirect(ic, a.Args, a)
 	}
 	//	if e := m.parseSimdMethod(a.Fun, a.Args); e != nil {
 	//		return e
@@ -729,9 +729,9 @@ args:
 	for i := range a.Args {
 		args = append(args, m.parseExpr(a.Args[i]))
 	}
-	return Call{Func: name, Args: args}
+	return Call{Func: name, Args: args, a: a}
 }
-func (m *Module) parseCallIndirect(a *ast.TypeAssertExpr, args []ast.Expr) (r CallIndirect) {
+func (m *Module) parseCallIndirect(a *ast.TypeAssertExpr, args []ast.Expr, an ast.Node) (r CallIndirect) {
 	ix, o := a.X.(*ast.IndexExpr)
 	if o == false {
 		panic(position(a) + ": type assertion: expected indirect function call")
@@ -742,6 +742,7 @@ func (m *Module) parseCallIndirect(a *ast.TypeAssertExpr, args []ast.Expr) (r Ca
 	r.Func = m.parseExpr(ix.Index)
 	r.ArgType, r.ResType = m.parseSignature(a.Type)
 	r.Args = make([]Expr, len(args))
+	r.a = an
 	for i := range args {
 		r.Args[i] = m.parseExpr(args[i])
 	}

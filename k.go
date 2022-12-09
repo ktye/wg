@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"go/ast"
 	"io"
 	"math"
 	"sort"
@@ -22,6 +23,7 @@ func (m Module) K(w io.Writer) {
 	var I []int
 	var S []string
 	var rtyp string
+	mcalls := make(map[string]bool)
 	push := func(t string, p int, i int, s string) int {
 		T = append(T, t)
 		P = append(P, p)
@@ -209,7 +211,13 @@ func (m Module) K(w io.Writer) {
 					p = push("lod", p, na, t)
 				}
 			}
+			x := len(P)
 			nodes(v.Args, p)
+			if t == "" && len(v.Args) > 1 {
+				if s := mcall(v.a, T[x:], S[x:]); s != "" {
+					mcalls[s] = true
+				}
+			}
 		case CallIndirect:
 			rt := ""
 			if len(v.ResType) == 1 {
@@ -220,8 +228,14 @@ func (m Module) K(w io.Writer) {
 			for _, a := range v.Args {
 				node(a, p)
 			}
+			x := len(P)
 			for _, t := range v.ArgType {
 				push("arg", p, na, typ[t])
+			}
+			if len(v.ArgType) > 1 {
+				if s := mcall(v.a, T[x:], S[x:]); s != "" {
+					mcalls[s+"(indirect)"] = true
+				}
 			}
 		case Cast:
 			p = push("cst", p, na, typ[v.Dst])
@@ -441,4 +455,35 @@ func (m Module) K(w io.Writer) {
 	fmt.Fprintf(w, "P:%s\n", ints(P))
 	fmt.Fprintf(w, "I:%s\n", ints(I))
 	fmt.Fprintf(w, "S:%s\n", syms(S))
+
+	/* print calls with subcalls that reference variables multiple times
+	keys := make([]string, 0)
+	for s := range mcalls {
+		keys = append(keys, s)
+	}
+	sort.Strings(keys)
+	for _, s := range keys {
+		fmt.Println("mcall", s)
+	}
+	*/
+}
+func mcall(a ast.Node, T, S []string) string { //function arguments do 2 or more calls, and reference variables multiple times.
+	l := make(map[string]int)
+	n := 0
+	for i, t := range T {
+		if t == "cal" || t == "cli" {
+			n++
+		}
+		if t == "get" {
+			l[S[i]]++
+		}
+	}
+	if n > 1 {
+		for _, v := range l {
+			if v > 1 {
+				return position(a)
+			}
+		}
+	}
+	return ""
 }

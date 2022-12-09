@@ -1,6 +1,7 @@
 package wg
 
 import (
+	"go/ast"
 	"go/types"
 	"io"
 	"strings"
@@ -121,6 +122,7 @@ type Op struct {
 type Call struct { //Expr
 	Func string
 	Args []Expr
+	a    ast.Node
 }
 type Cast struct {
 	Dst, Src Type
@@ -131,6 +133,7 @@ type CallIndirect struct {
 	Args    []Expr
 	ArgType []Type
 	ResType []Type
+	a       ast.Node
 }
 type If struct {
 	If         Expr
