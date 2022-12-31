@@ -153,7 +153,7 @@ func Catch(f func()) {
 }
 
 // Direct wasm opcodes
-func I32clz(x uint32) int32    { return int32(bits.LeadingZeros32(x)) }
+func I32clz(x int32) int32     { return int32(bits.LeadingZeros32(uint32(x))) }
 func I64clz(x uint64) int64    { return int64(bits.LeadingZeros64(x)) }
 func I32ctz(x uint32) int32    { return int32(bits.TrailingZeros32(x)) }
 func I64ctz(x uint64) int64    { return int64(bits.TrailingZeros64(x)) }
@@ -176,39 +176,39 @@ func I32reinterpret_f32(x float32) uint32 { return math.Float32bits(x) }
 func I64reinterpret_f64(x float64) uint64 { return math.Float64bits(x) }
 
 // for debugging only (ignored by wasm)
-//func Printf(f string, a ...interface{}) { fmt.Printf(f, a...) }
-func Prinf(x int32, y float64) { fmt.Fprintf(os.Stderr, "%d %.6f\n", x, y); }
-func Printi(x, y int32) { fmt.Fprintf(os.Stderr, "%d %d\n", x, y) }
+// func Printf(f string, a ...interface{}) { fmt.Printf(f, a...) }
+func Prinf(x int32, y float64) { fmt.Fprintf(os.Stderr, "%d %.6f\n", x, y) }
+func Printi(x, y int32)        { fmt.Fprintf(os.Stderr, "%d %d\n", x, y) }
 func Printk(x int32, y uint64) {
-	fmt.Fprintf(os.Stderr, "%d ", x);
-	printk(y);
-	fmt.Fprintf(os.Stderr, "\n");
+	fmt.Fprintf(os.Stderr, "%d ", x)
+	printk(y)
+	fmt.Fprintf(os.Stderr, "\n")
 }
 func printk(y uint64) {
 	y &^= 1
-	t := y>>59
+	t := y >> 59
 	if t > 16 {
-		n := I32(int32(y)-12)
+		n := I32(int32(y) - 12)
 		fmt.Fprintf(os.Stderr, "(%d#%d) ", n, y>>59)
 	} else {
 		fmt.Fprintf(os.Stderr, "(%d) ", y>>59)
 	}
 }
 func Printu(x int32, y uint64) { fmt.Fprintf(os.Stderr, "%d %d\n", x, y) }
-func Printl(x int32, y uint64){
+func Printl(x int32, y uint64) {
 	if 23 != y>>59 {
-		fmt.Fprintf(os.Stderr, "%dL !%d\n",x,y>>59)
+		fmt.Fprintf(os.Stderr, "%dL !%d\n", x, y>>59)
 		return
 	}
 	y &^= 1
-	n := I32(int32(y)-12)
-	fmt.Fprintf(os.Stderr, "%dL %d# ",x,n)
+	n := I32(int32(y) - 12)
+	fmt.Fprintf(os.Stderr, "%dL %d# ", x, n)
 	if n > 5 {
 		n = 5
 	}
-	for i := int32(0); i<n; i++ {
+	for i := int32(0); i < n; i++ {
 		yp := int32(y) + 8*i
 		printk(uint64(I64(yp)))
 	}
-	fmt.Fprintf(os.Stderr, "\n");
+	fmt.Fprintf(os.Stderr, "\n")
 }

@@ -75,7 +75,7 @@ func negf(x float32) float32 { return -x }
 
 // (func $clz (param $x i32) (result i32)
 // local.get $x i32.clz)
-func clz(x uint32) int32 { return I32clz(x) }
+func clz(x uint32) int32 { return I32clz(int32(x)) }
 
 // structs
 type st struct {
