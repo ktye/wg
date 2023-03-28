@@ -642,6 +642,9 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 		}
 		arg := a.Args[0]
 		r := Cast{Dst: parseType(t, p), Src: parseType(info.TypeOf(arg).Underlying(), p), Arg: m.parseExpr(arg)}
+		if r.Dst == F64 && r.Src == F64 {
+			panic(p + ": cast f->f")
+		}
 		if l, ok := r.Arg.(Literal); ok && l.Type == I32 && r.Dst == I64 {
 			l.Type = I64
 			r.Arg = l
