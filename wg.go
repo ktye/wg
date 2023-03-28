@@ -642,8 +642,11 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 		}
 		arg := a.Args[0]
 		r := Cast{Dst: parseType(t, p), Src: parseType(info.TypeOf(arg).Underlying(), p), Arg: m.parseExpr(arg)}
-		if r.Dst == F64 && r.Src == F64 {
-			panic(p + ": cast f->f")
+		if r.Dst == F64 && (r.Src != I32 && r.Src != I64) {
+			panic(p + ": unsupported cast: " + string(r.Src) + "->" + string(r.Dst))
+		}
+		if r.Src == F64 && (r.Dst != I32 && r.Dst != I64) {
+			panic(p + ": unsupported cast: " + string(r.Dst) + "->" + string(r.Src))
 		}
 		if l, ok := r.Arg.(Literal); ok && l.Type == I32 && r.Dst == I64 {
 			l.Type = I64
