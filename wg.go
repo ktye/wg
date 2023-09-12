@@ -13,6 +13,7 @@ import (
 	"strings"
 )
 
+var Small bool
 var TryCatch bool
 var MultiMemory bool
 var fset *token.FileSet
@@ -35,6 +36,22 @@ func Parse(path string) Module { // file.go or dir
 			panic("multiple packages in " + path)
 		}
 		for _, p := range pkgs {
+			for name, pp := range p.Files {
+				com := pp.Comments
+				if len(com) > 0 && len(com[0].List) > 0 {
+					c := com[0].List[0]
+					if c.Text == "//go:build small" {
+						if Small == false {
+							delete(p.Files, name)
+						}
+					}
+					if c.Text == "//go:build !small" {
+						if Small {
+							delete(p.Files, name)
+						}
+					}
+				}
+			}
 			f = ast.MergePackageFiles(p, ast.FilterFuncDuplicates|ast.FilterImportDuplicates)
 		}
 	}
