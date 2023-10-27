@@ -724,7 +724,11 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 					panic(fmt.Sprintf("data section [%d .. %d] overlaps [%d .. %d]", min, max, d.Off, d.Off+len(d.Data)))
 				}
 			}
-			m.Data = append(m.Data, Data{off, data})
+			if l := len(m.Data); l > 0 && off == m.Data[l-1].Off+len(m.Data[l-1].Data) {
+				m.Data[l-1].Data += data
+			} else {
+				m.Data = append(m.Data, Data{off, data})
+			}
 		}
 		return Nop{}
 	case "Printf":
