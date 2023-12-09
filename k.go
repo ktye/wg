@@ -310,6 +310,9 @@ func (m Module) K(w io.Writer) {
 					p = push("asn", p, 0, name) //todo global asn
 				}
 			}
+			if len(de) == 0 {
+				panic("switch no-default?")
+			}
 			p = push("swc", p, ib(len(de) > 0), typ[t])
 			node(v.E, p)
 			for _, n := range cs {
