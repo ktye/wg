@@ -20,6 +20,7 @@ var fset *token.FileSet
 var info types.Info
 var pkg *types.Package
 var printast bool
+var builtins map[string]bool
 
 func Parse(path string) Module { // file.go or dir
 	var f *ast.File
@@ -135,6 +136,9 @@ func (m *Module) parseFuncs(a *ast.File) (r []Func) {
 	for _, d := range a.Decls {
 		if f, o := d.(*ast.FuncDecl); o {
 			tf := info.ObjectOf(f.Name).(*types.Func)
+			if builtins[f.Name.Name] {
+				continue
+			}
 			m.scopes = catscopes(tf.Scope())
 			ff := m.parseFunc(f)
 			if ff.Name != "init" {
@@ -410,6 +414,9 @@ func (m *Module) parseDeclSpec(s ast.Spec, globalscope int, tok token.Token) (r 
 	var glob []bool
 	v := s.(*ast.ValueSpec)
 	for i, n := range v.Names {
+		if builtins[n.Name] {
+			continue
+		}
 		var sn []string
 		var st []Type
 		if v.Type != nil { // var g int32
@@ -870,5 +877,17 @@ func (m *Module) parseExpr(a ast.Expr) Expr {
 		return m.parseExpr(v.X)
 	default:
 		panic(position(a) + ": unknown expr: " + reflectType(a))
+	}
+}
+func init() {
+	builtins = make(map[string]bool)
+	b := `Memory Memory2 Memorysize Memorysize2 Memorygrow Memorygrow2 Memorycopy Memoryfill Memorycopy2 Memorycopy3
+Functions Export ExportAll Data Catch
+I8 U8 I16 U16 I32 F32 U32 I64 U64 F64 SetI8 SetI16 SetI32 SetI64 SetF32 SetF64 I32B
+I32clz I64clz I32ctz I64ctz I32popcnt I64popcnt
+F64abs F64sqrt F64ceil F64floor F64nearest F64min F64max F64copysign F32reinterpret_i32 F64reinterpret_i64 I32reinterpret_f32 I64reinterpret_f64
+Bytes Bytes2 Func`
+	for _, s := range strings.Fields(b) {
+		builtins[s] = true
 	}
 }
