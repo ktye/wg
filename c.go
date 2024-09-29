@@ -623,6 +623,12 @@ func (f For) c(w io.Writer) {
 	}
 }
 func (b Branch) c(w io.Writer) {
+	if b.Break {
+		fmt.Fprintf(w, "break;\n")
+	} else {
+		fmt.Fprintf(w, "continue;\n")
+	}
+	/*
 	if b.Label == "" {
 		if b.Break {
 			fmt.Fprintf(w, "break;\n")
@@ -635,6 +641,7 @@ func (b Branch) c(w io.Writer) {
 		}
 		fmt.Fprintf(w, "goto %s;\n", b.Label)
 	}
+	*/
 }
 func (p Printf) c(w io.Writer) {
 	fmt.Fprintf(w, "printf(%s", p.Format)
