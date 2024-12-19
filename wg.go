@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"go/types"
 	"io/fs"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -39,7 +40,7 @@ func Parse(path string) Module { // file.go or dir
 		}
 		for _, p := range pkgs {
 			for name := range p.Files {
-				o, e := BuildContext.MatchFile(path, name)
+				o, e := BuildContext.MatchFile(path, filepath.Base(name))
 				fatal(e)
 				if !o {
 					delete(p.Files, name)
