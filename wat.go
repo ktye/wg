@@ -12,6 +12,7 @@ import (
 // convert wg ast to webassembly text format
 
 var NoSys bool
+var Nomain bool
 
 func (m Module) Wat(w io.Writer) {
 	fmt.Fprintln(w, "(module")

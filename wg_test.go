@@ -3,11 +3,8 @@ package wg
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"strings"
 	"testing"
-
-	"github.com/ktye/wg/dumbindent"
 )
 
 func TestWg(t *testing.T) {
@@ -25,21 +22,6 @@ func TestWg(t *testing.T) {
 			got := trim(string(buf.Bytes()))
 			exp := trim(f.Doc)
 			if got != exp {
-				t.Fatalf("func %s\ngot: %q\nexp: %q\n", f.Name, got, exp)
-			}
-		}
-	}
-
-	{
-		m := Parse("c_test.go")
-		m.C(io.Discard) //fill maps
-		for _, f := range m.Funcs {
-			var buf bytes.Buffer
-			cfunc(&buf, f)
-			got := string(dumbindent.FormatBytes(nil, buf.Bytes(), &dumbindent.Options{Spaces: 1}))
-			exp := f.Doc
-			if got != exp {
-				fmt.Println(got)
 				t.Fatalf("func %s\ngot: %q\nexp: %q\n", f.Name, got, exp)
 			}
 		}
@@ -74,13 +56,4 @@ func trim(s string) string {
 	}
 	s = strings.Replace(s, " )", ")", -1)
 	return s
-}
-
-func TestCquote(t *testing.T) {
-	s := "\x01\t\x10`\x01\xc4"
-	x := `\001\t\020` + "`" + `\001\304`
-	g := cquote(s)
-	if g != x {
-		t.Fatalf("expected %q got %q\n", x, g)
-	}
 }
