@@ -12,7 +12,7 @@ import (
 // convert wg ast to webassembly text format
 
 var NoSys bool
-var Nomain bool
+var NoMain bool
 
 func (m Module) Wat(w io.Writer) {
 	fmt.Fprintln(w, "(module")
@@ -72,7 +72,7 @@ func (m Module) Wat(w io.Writer) {
 	syscalls = make(map[string]bool)
 	for _, f := range m.Funcs {
 		f.Exported = m.Exports[f.Name] || m.exportAll
-		if f.Name == "main" && Nomain == true {
+		if f.Name == "main" && NoMain == true {
 			continue
 		}
 		f.wat(w)

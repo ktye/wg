@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strings"
 
 	"github.com/ktye/wg"
 	"github.com/ktye/wg/f77"
@@ -23,8 +24,8 @@ func main() {
 	if a0() == "-multi" {
 		wg.MultiMemory, a = true, a[1:]
 	}
-	if a0() == "-small" {
-		wg.Small, a = true, a[1:]
+	if a0() == "-tags" {
+		wg.BuildContext.BuildTags, a = strings.Split(a[1], ","), a[2:]
 	}
 	if a0() == "-nosys" { // wasm-only, no system interface (and no imports)
 		wg.NoSys, a = true, a[1:]
@@ -35,8 +36,8 @@ func main() {
 	if a0() == "-k" {
 		k, a = true, a[1:]
 	}
-	if a0() == "-nomain" { // -c&wasm: skip main
-		wg.Nomain, a = true, a[1:]
+	if a0() == "-nomain" { //wasm: skip main
+		wg.NoMain, a = true, a[1:]
 	}
 	m := wg.Parse(a[0])
 	if f {

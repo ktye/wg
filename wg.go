@@ -3,6 +3,7 @@ package wg
 import (
 	"fmt"
 	"go/ast"
+	"go/build"
 	"go/importer"
 	"go/parser"
 	"go/token"
@@ -13,7 +14,6 @@ import (
 	"strings"
 )
 
-var Small bool
 var TryCatch bool
 var MultiMemory bool
 var fset *token.FileSet
@@ -21,6 +21,7 @@ var info types.Info
 var pkg *types.Package
 var printast bool
 var builtins map[string]bool
+var BuildContext = build.Default
 
 func Parse(path string) Module { // file.go or dir
 	var f *ast.File
@@ -37,20 +38,11 @@ func Parse(path string) Module { // file.go or dir
 			panic("multiple packages in " + path)
 		}
 		for _, p := range pkgs {
-			for name, pp := range p.Files {
-				com := pp.Comments
-				if len(com) > 0 && len(com[0].List) > 0 {
-					c := com[0].List[0]
-					if c.Text == "//go:build small" {
-						if Small == false {
-							delete(p.Files, name)
-						}
-					}
-					if c.Text == "//go:build !small" {
-						if Small {
-							delete(p.Files, name)
-						}
-					}
+			for name := range p.Files {
+				o, e := BuildContext.MatchFile(path, name)
+				fatal(e)
+				if !o {
+					delete(p.Files, name)
 				}
 			}
 			f = ast.MergePackageFiles(p, ast.FilterFuncDuplicates|ast.FilterImportDuplicates)
