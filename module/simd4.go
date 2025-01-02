@@ -45,11 +45,6 @@ func C4splat(x int32) (r C4) {
 }
 func I4splat(x int32) (r I4)   { return I4{x, x, x, x} }
 func F4splat(x float64) (r F4) { return F4{x, x} }
-func (v F4) Replace_lane1(f float64) F4 {
-	v[1] = f
-	return v
-}
-func (v F4) Shuffle() (r F4) { r[0], r[1] = v[1], v[0]; return r }
 
 func mini8(x, y int8) int8 { return int8(mini32(int32(x), int32(y))) }
 func mini32(x, y int32) int32 {
@@ -74,32 +69,6 @@ func absi32(x int32) int32 {
 	}
 	return x
 }
-
-func (v C4) All_true() int32 {
-	for i := range v {
-		if (v[i] != 0) == false {
-			return 0
-		}
-	}
-	return 1
-}
-func (v C4) Any_true() int32 {
-	for i := range v {
-		if v[i] != 0 {
-			return 1
-		}
-	}
-	return 0
-}
-func (v I4) Any_true() int32 {
-	for i := range v {
-		if v[i] != 0 {
-			return 1
-		}
-	}
-	return 0
-}
-func (v C4) Extract_lane_s0() int32 { return int32(v[0]) }
 
 func (v C4) Neg() (r C4) {
 	for i := range r {
@@ -411,3 +380,38 @@ func (x F4) Gt_s(y F4) (r F4) {
 	}
 	return r
 }
+
+/*
+func (v F4) Replace_lane1(f float64) F4 {
+	v[1] = f
+	return v
+}
+func (v F4) Shuffle() (r F4) { r[0], r[1] = v[1], v[0]; return r }
+func (v C4) All_true() int32 {
+	for i := range v {
+		if (v[i] != 0) == false {
+			return 0
+		}
+	}
+	return 1
+}
+func (v C4) Any_true() int32 {
+	for i := range v {
+		if v[i] != 0 {
+			return 1
+		}
+	}
+	return 0
+}
+func (v I4) Any_true() int32 {
+	for i := range v {
+		if v[i] != 0 {
+			return 1
+		}
+	}
+	return 0
+}
+func (v C4) Extract_lane_s0() int32 { return int32(v[0]) }
+*/
+
+
