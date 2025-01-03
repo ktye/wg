@@ -229,11 +229,26 @@ func parseTypes(a ast.Expr) (names []string, rtype []Type) {
 		//case *types.Array:
 		//	vt := parseSimdType(v, pos)
 		//	return []string{name}, []Type{vt}
+		case *types.Slice:
+			vt := parseSimdType(v, pos)
+			return []string{name}, []Type{vt}
 		default:
 			panic(position(a) + ": unknown type: " + reflectType(v))
 		}
 	}
 	return f("", info.TypeOf(a).Underlying())
+}
+func parseSimdType(a *types.Slice, pos string) Type {
+	switch a.String() {
+	case "[]int8":
+		return VC
+	case "[]int32":
+		return VI
+	case "[]float64":
+		return VF
+	default:
+		panic(pos + ": unknown vector type: " + a.String())
+	}
 }
 
 //	func parseSimdType(a *types.Array, pos string) Type {
@@ -607,25 +622,24 @@ func (m *Module) varname(a ast.Node) string {
 		panic(position(a) + ": unknown variable node: " + reflectType(a))
 	}
 }
-
-//	func (m *Module) parseSimdMethod(a ast.Node, argv []ast.Expr) Expr {
-//		if v, o := a.(*ast.SelectorExpr); o {
-//			if vt, o := info.TypeOf(v.X).Underlying().(*types.Array); o {
-//				st := parseSimdType(vt, position(a))
-//				str := string(st)
-//				recv := m.parseExpr(v.X)
-//				args := []Expr{recv}
-//				for i := range argv {
-//					args = append(args, m.parseExpr(argv[i]))
-//				}
-//				return Call{
-//					Func: fmt.Sprintf("%s.%s", str, v.Sel.Name),
-//					Args: args,
-//				}
-//			}
-//		}
-//		return nil
-//	}
+func (m *Module) parseSimdMethod(a ast.Node, argv []ast.Expr) Expr {
+	if v, o := a.(*ast.SelectorExpr); o {
+		if vt, o := info.TypeOf(v.X).Underlying().(*types.Slice); o {
+			st := parseSimdType(vt, position(a))
+			str := string(st)
+			recv := m.parseExpr(v.X)
+			args := []Expr{recv}
+			for i := range argv {
+				args = append(args, m.parseExpr(argv[i]))
+			}
+			return Call{
+				Func: fmt.Sprintf("%s.%s", str, v.Sel.Name),
+				Args: args,
+			}
+		}
+	}
+	return nil
+}
 func parseLiteral(a *ast.BasicLit, xt types.Type) (r Literal) {
 	var t Type
 	if b, o := info.TypeOf(a).(*types.Basic); o && (b.Kind() == types.UntypedInt || b.Kind() == types.Uint || b.Kind() == types.Int) && xt != nil {
@@ -674,9 +688,9 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 	if ic, o := a.Fun.(*ast.TypeAssertExpr); o {
 		return m.parseCallIndirect(ic, a.Args, a)
 	}
-	//	if e := m.parseSimdMethod(a.Fun, a.Args); e != nil {
-	//		return e
-	//	}
+	if e := m.parseSimdMethod(a.Fun, a.Args); e != nil {
+		return e
+	}
 	name := m.varname(a.Fun)
 
 	var args []Expr

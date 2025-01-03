@@ -21,7 +21,10 @@ const (
 	U64        = "u64"
 	F32        = "f32"
 	F64        = "f64"
-	I8x16      = "I8x16"
+	VI         = "VI"
+	VF         = "VF"
+	VC         = "VC"
+	I8x16      = "I8x16" //todo rm
 	I32x4      = "I32x4"
 	F64x2      = "F64x2"
 )
