@@ -26,7 +26,7 @@ func mkC() VC { return make(VC, nc) }
 func mkI() VI { return make(VI, ni) }
 func mkF() VF { return make(VF, nf) }
 
-func Iota() VI { 
+func Iota() VI {
 	r := mkI()
 	for i := range r {
 		r[i] = int32(i)
@@ -50,21 +50,21 @@ func VI1() VI {
 func VIload(a int32) VI {
 	r := mkI()
 	for i := range r {
-		r[i] = I32(a+4*int32(i))
+		r[i] = I32(a + 4*int32(i))
 	}
 	return r
 }
 func VFload(a int32) VF {
 	r := mkF()
 	for i := range r {
-		r[i] = F64(a+8*int32(i))
+		r[i] = F64(a + 8*int32(i))
 	}
 	return r
 }
 func VIloadB(a int32) VI {
 	r := mkI()
 	for i := range r {
-		r[i] = I8(a+int32(i))
+		r[i] = I8(a + int32(i))
 	}
 	return r
 }
@@ -292,22 +292,43 @@ func (x VI) Max_s(y VI) VI {
 	}
 	return r
 }
+func (x VI) Hmin_s() int32 {
+	r := x[0]
+	for i := 1; i < len(x); i++ {
+		r = mini32(r, x[i])
+	}
+	return r
+}
+func (x VI) Hmax_s() int32 {
+	r := x[0]
+	for i := 1; i < len(x); i++ {
+		r = maxi32(r, x[i])
+	}
+	return r
+}
+func (x VI) Hsum() int32 {
+	r := x[0]
+	for i := 1; i < len(x); i++ {
+		r += x[i]
+	}
+	return r
+}
 
-func (v VF) Sqrt() VF { 
+func (v VF) Sqrt() VF {
 	r := mkF()
 	for i := range r {
 		r[i] = math.Sqrt(v[i])
 	}
 	return r
 }
-func (v VF) Abs() VF { 
+func (v VF) Abs() VF {
 	r := mkF()
 	for i := range r {
 		r[i] = math.Abs(v[i])
 	}
 	return r
 }
-func (v VF) Neg() VF { 
+func (v VF) Neg() VF {
 	r := mkF()
 	for i := range r {
 		r[i] = -v[i]
@@ -515,6 +536,27 @@ func (x VF) Gt(y VF) VF {
 	}
 	return r
 }
+func (x VF) Hmin() float64 {
+	r := x[0]
+	for i := 1; i < len(x); i++ {
+		r = pmin(r, x[i])
+	}
+	return r
+}
+func (x VF) Hmax() float64 {
+	r := x[0]
+	for i := 1; i < len(x); i++ {
+		r = pmax(r, x[i])
+	}
+	return r
+}
+func (x VF) Hsum() float64 {
+	r := x[0]
+	for i := 1; i < len(x); i++ {
+		r += x[i]
+	}
+	return r
+}
 
 /*
 func (v F4) Replace_lane1(f float64) F4 {
@@ -548,5 +590,3 @@ func (v I4) Any_true() int32 {
 }
 func (v C4) Extract_lane_s0() int32 { return int32(v[0]) }
 */
-
-
