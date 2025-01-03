@@ -40,6 +40,13 @@ func VCload(a int32) VC {
 	}
 	return r
 }
+func VI1() VI {
+	r := mkI()
+	for i := range r {
+		r[i] = 1
+	}
+	return r
+}
 func VIload(a int32) VI {
 	r := mkI()
 	for i := range r {
@@ -51,6 +58,13 @@ func VFload(a int32) VF {
 	r := mkF()
 	for i := range r {
 		r[i] = F64(a+8*int32(i))
+	}
+	return r
+}
+func VIloadB(a int32) VI {
+	r := mkI()
+	for i := range r {
+		r[i] = I8(a+int32(i))
 	}
 	return r
 }
@@ -233,6 +247,13 @@ func (x VI) Mul(y VI) VI {
 	r := mkI()
 	for i := range r {
 		r[i] = x[i] * y[i]
+	}
+	return r
+}
+func (x VI) And(y VI) VI {
+	r := mkI()
+	for i := range r {
+		r[i] = x[i] & y[i]
 	}
 	return r
 }
@@ -476,7 +497,7 @@ func (x VF) Ne(y VF) VF {
 	}
 	return r
 }
-func (x VF) Lt_s(y VF) VF {
+func (x VF) Lt(y VF) VF {
 	r := mkF()
 	for i := range r {
 		if x[i] < y[i] {
@@ -485,7 +506,7 @@ func (x VF) Lt_s(y VF) VF {
 	}
 	return r
 }
-func (x VF) Gt_s(y VF) VF {
+func (x VF) Gt(y VF) VF {
 	r := mkF()
 	for i := range r {
 		if x[i] > y[i] {
