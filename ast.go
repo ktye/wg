@@ -37,6 +37,9 @@ func (t Type) String() string {
 	if strings.Index(r, "x") > 0 {
 		return "v128"
 	}
+	if len(r) > 0 && r[0] == 'V' {
+		return "v128"
+	}
 	return r
 }
 
@@ -50,6 +53,7 @@ type Module struct {
 	Funcs     []Func
 	Table     []TableEntries
 	Data      []Data
+	simdwidth int
 	current   *Func
 	scopes    []*types.Scope
 	exportAll bool

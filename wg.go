@@ -46,7 +46,7 @@ func Parse(path string) Module { // file.go or dir
 					delete(p.Files, name)
 				}
 			}
-			f = ast.MergePackageFiles(p, ast.FilterFuncDuplicates|ast.FilterImportDuplicates)
+			f = ast.MergePackageFiles(p /*ast.FilterFuncDuplicates|*/, ast.FilterImportDuplicates)
 		}
 	}
 	//ast.Print(fset, f)
@@ -744,6 +744,10 @@ func (m *Module) parseCall(a *ast.CallExpr) Expr {
 				m.Data = append(m.Data, Data{off, data})
 			}
 		}
+		return Nop{}
+	case "Simd":
+		w, _ := strconv.Atoi(a.Args[0].(*ast.BasicLit).Value)
+		m.simdwidth = w
 		return Nop{}
 	case "Printf":
 		return parsePrintf(a.Args)

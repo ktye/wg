@@ -341,7 +341,9 @@ func (c Call) call(w io.Writer) {
 		}
 
 	default:
-		// if simd(c.Func, w) { return; }
+		if simd(c.Func, c.Args, w) {
+			return
+		}
 		syscall(c.Func)
 
 		// normal function call
@@ -702,7 +704,7 @@ func optimize(b []byte) (r []byte) {
 	for i := range w {
 		s[i] = string(w[i])
 	}
-	f := []func([]string) []string{optRet, optTee, optNot0, optWhileLts, indent}
+	f := []func([]string) []string{optRet, optTee, optSplat, optNot0, optWhileLts, indent}
 	for i := range f {
 		s = f[i](s)
 	}
@@ -736,6 +738,11 @@ func optTee(w []string) []string {
 		j++
 	}
 	return w[:j]
+}
+func optSplat(w []string) []string {
+	w = replace(w, "i32.load;i32x4.splat", "v128.load32_splat")
+	w = replace(w, "f64.load;f64x2.splat", "v128.load64_splat")
+	return w
 }
 func optNot0(w []string) []string { return replace(w, "i32.const 0;i32.ne;if", "if") }
 func optWhileLts(w []string) []string {

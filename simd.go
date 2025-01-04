@@ -1,9 +1,6 @@
 package wg
 
-/*
-
 import (
-	"fmt"
 	"io"
 	"strings"
 )
@@ -11,43 +8,50 @@ import (
 var simdops map[string]string
 
 func init() {
+	m := map[string]string{"VC": "i8x16", "VI": "i32x4", "VF": "f64x2"}
 	simdops = make(map[string]string)
 	for _, op := range []string{"Sqrt", "Neg", "Abs", "Add", "Sub", "Mul", "Div", "Shl", "Shr_u", "Shr_s", "Min_s", "Max_s", "Pmin", "Pmax", "Eq", "Ne", "Lt_u", "Lt_s", "Gt_u", "Gt_s", "All_true", "Any_true", "And", "Or", "Xor", "Not"} {
-		for _, t := range []string{"I8x16", "I32x4", "F64x2"} {
-			if t == "F64x2" && strings.HasSuffix(op, "_u") { // F64x2.Lt_u => F64x2.Lt
-				op = strings.TrimSuffix(op, "_u")
-			}
+		for _, t := range []string{"VC", "VI", "VF"} {
+			//if t == "VF" && strings.HasSuffix(op, "_u") { // F64x2.Lt_u => F64x2.Lt
+			//	op = strings.TrimSuffix(op, "_u")
+			//}
 			s := t + "." + op
-			simdops[s] = strings.ToLower(s)
+			simdops[s] = strings.ToLower(m[t] + "." + op)
 			switch op {
 			case "Any_true", "And", "Or", "Xor", "Not":
 				simdops[s] = "v128." + strings.ToLower(op) // prefix is v128 not i8x16..
 			}
 		}
 	}
+	for k, v := range map[string]string{
+		"VCsplat": "i8x16.splat", "VIsplat": "i32x4.splat", "VFsplat": "f64x2.splat",
+		"VCload": "v128.load", "VIload": "v128.load", "VFload": "v128.load",
+		"VCstore": "v128.store", "VIstore": "v128.store", "VFstore": "v128.store",
+		"Iota": "v128.const i32x4 0 1 2 3", "VI1": "v128.const i32x4 1 1 1 1",
+		"VIloadB":   "i32.load\ni32x4.splat\ni16x8.extend_low_i8x16_s\ni32x4.extend_low_i16x8_s",
+		"VI.Hmin_s": "i32x4.extract_lane 0\n!i32x4.extract_lane 1\ncall $mini\n!i32x4.extract_lane 2\ncall $mini\n!i32x4.extract_lane 3\ncall $mini",
+		"VI.Hmax_s": "i32x4.extract_lane 0\n!i32x4.extract_lane 1\ncall $maxi\n!i32x4.extract_lane 2\ncall $maxi\n!i32x4.extract_lane 3\ncall $maxi",
+		"VI.Hsum":   "i32x4.extract_lane 0\n!i32x4.extract_lane 1\ni32.add\n!i32x4.extract_lane 2\ni32.add\n!i32x4.extract_lane 3\ni32.add",
+		"VF.Hmin":   "f64x2.extract_lane 0\n!f64x2.extract_lane 1\nf64.min",
+		"VF.Hmax":   "f64x2.extract_lane 0\n!f64x2.extract_lane 1\nf64.max",
+		"VF.Hsum":   "f64x2.extract_lane 0\n!f64x2.extract_lane 1\nf64.add",
+	} {
+		simdops[k] = v
+	}
 }
 
-func simd(x string, w io.Writer) bool {
+func simd(x string, args []Expr, w io.Writer) bool {
+	r := func(s string) string {
+		var a strings.Builder
+		args[0].wat(&a)
+		return strings.ReplaceAll(s, "!", a.String())
+	}
 	if op, ok := simdops[x]; ok {
+		if strings.HasPrefix(x, "VI.H") || strings.HasPrefix(x, "VF.H") { // VI.Hmin_s|Hmax_s|Hsum duplicate argument
+			op = r(op)
+		}
 		w.Write([]byte(op + "\n"))
 		return true
 	}
-	var op string
-	switch x {
-	case "I8x16splat", "I32x4splat", "F64x2splat":
-		op = fmt.Sprintf("%c%s.splat", x[0]+32, x[1:5])
-	case "I8x16load", "I32x4load", "F64x2load":
-		op = "v128.load"
-	case "I8x16store", "I32x4store", "F64x2store":
-		op = "v128.store"
-	case "F64x2.Replace_lane1":
-		op = "f64x2.replace_lane 1"
-	case "I8x16.Extract_lane_s0":
-		op = "i8x16.extract_lane_s 0"
-	default:
-		return false
-	}
-	w.Write([]byte(op + "\n"))
-	return true
+	return false
 }
-*/
