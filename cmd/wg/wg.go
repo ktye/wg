@@ -12,6 +12,7 @@ func main() {
 	a := os.Args[1:]
 	f := false
 	k := false
+	c := false
 	a0 := func() string {
 		if len(a) == 0 {
 			return ""
@@ -36,6 +37,9 @@ func main() {
 	if a0() == "-k" {
 		k, a = true, a[1:]
 	}
+	if a0() == "-c" {
+		c, a = true, a[1:]
+	}
 	if a0() == "-nomain" { //wasm: skip main
 		wg.NoMain, a = true, a[1:]
 	}
@@ -44,6 +48,8 @@ func main() {
 		f77.F(os.Stdout, m)
 	} else if k {
 		m.K(os.Stdout)
+	} else if c {
+		m.C(os.Stdout)
 	} else {
 		m.Wat(os.Stdout)
 	}
