@@ -22,7 +22,7 @@ func (m Module) C(ww io.Writer) {
 	w.Write([]byte(ch)[1:])
 
 	typ := func(t Type) string {
-		return t.String()
+		return string(t)
 	}
 	fname := func(s string) string {
 		if strings.Index("  main ldexp hypot atan2 atan exp log pow ", " " + s + " ") > 0 {
@@ -389,7 +389,7 @@ static int32_t Memorygrow2(int32_t delta){
 static void Memorycopy (int32_t dst, int32_t src, int32_t n){ memcpy($c +dst, $c +src, (size_t)n); }
 static void Memorycopy2(int32_t dst, int32_t src, int32_t n){ memcpy($c2+dst, $c2+src, (size_t)n); }
 static void Memorycopy3(int32_t dst, int32_t src, int32_t n){ memcpy($c +dst, $c2+src, (size_t)n); }
-static void Memoryfill(int32_t p, int32_t v, int32_t n){ memset($c+p, (int)v, (size_t)n); }
+//static void Memoryfill(int32_t p, int32_t v, int32_t n){ memset($c+p, (int)v, (size_t)n); }
 static int32_t  I32clz(int32_t x) { return (int32_t)__builtin_clz((unsigned int)x); }
 static double   F64reinterpret_i64(uint64_t x){union{uint64_t i;double f;}u;u.i=x;return u.f;}
 static uint64_t I64reinterpret_f64(double   x){union{uint64_t i;double f;}u;u.f=x;return u.i;}
