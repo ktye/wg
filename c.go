@@ -1,16 +1,16 @@
 package wg
 
 import (
-	"io"
-	"fmt"
 	"bytes"
-	"strings"
-	"strconv"
 	"encoding/hex"
+	"fmt"
+	"io"
+	"strconv"
+	"strings"
 )
 
 func (m Module) C(ww io.Writer) {
-	w := cfmt{b:bytes.NewBuffer(nil), w:ww}
+	w := cfmt{b: bytes.NewBuffer(nil), w: ww}
 
 	maxfn := 0
 	for _, t := range m.Table {
@@ -25,14 +25,14 @@ func (m Module) C(ww io.Writer) {
 		return string(t)
 	}
 	fname := func(s string) string {
-		if strings.Index("  main ldexp hypot atan2 atan exp log pow ", " " + s + " ") > 0 {
+		if strings.Index("  main ldexp hypot atan2 atan exp log pow ", " "+s+" ") > 0 {
 			return s + "_"
 		}
 		return s
 	}
 	opa := func(s string) string {
 		if s == "&^" {
-			return "&!"
+			return "&~"
 		}
 		return s
 	}
@@ -48,7 +48,7 @@ func (m Module) C(ww io.Writer) {
 			fmt.Fprintf(w, ")")
 		}
 	}
-	
+
 	ex = func(e Expr) {
 		switch v := e.(type) {
 		case Assign:
@@ -65,7 +65,11 @@ func (m Module) C(ww io.Writer) {
 				if len(v.Expr) < len(v.Name) {
 					fmt.Fprintf(w, "0")
 				} else {
-					ex(v.Expr[i])
+					if tna != "" {
+						em(v.Expr[i])
+					} else {
+						ex(v.Expr[i])
+					}
 				}
 				fmt.Fprintf(w, ";\n")
 			}
@@ -138,13 +142,13 @@ func (m Module) C(ww io.Writer) {
 				} else {
 					ex(v.Cond)
 				}
-				fmt.Fprintf(w,"){\n")
+				fmt.Fprintf(w, "){\n")
 				ex(v.Body)
 				if v.Post != nil {
 					ex(v.Post)
 					fmt.Fprintf(w, ";\n")
 				}
-				fmt.Fprintf(w,"}")
+				fmt.Fprintf(w, "}")
 			}
 		case GlobalGet:
 			fmt.Fprintf(w, "%s", v)
@@ -168,8 +172,11 @@ func (m Module) C(ww io.Writer) {
 			if v.Type == F64 && strings.IndexAny(v.Value, ".e") < 0 {
 				fmt.Fprintf(w, ".0")
 			}
-			if v.Type == I64 || v.Type == "U64" {
-				fmt.Fprintf(w, "ll");
+			if v.Type == U32 || v.Type == U64 {
+				fmt.Fprintf(w, "u")
+			}
+			if v.Type == I64 || v.Type == U64 {
+				fmt.Fprintf(w, "l")
 			}
 		case LocalGet:
 			fmt.Fprintf(w, "%s", v)
@@ -210,7 +217,7 @@ func (m Module) C(ww io.Writer) {
 			}
 		case Unary:
 			fmt.Fprintf(w, "%s", opa(v.Op.Name))
-			ex(v.X)
+			em(v.X)
 		default:
 			panic(fmt.Sprintf("nyi: %T", v))
 		}
@@ -226,8 +233,11 @@ func (m Module) C(ww io.Writer) {
 		}
 	}
 
+	form := map[Type]string{
+		I32: "%d", U32: "%u", I64: "%ld", U64: "%lu", F64: "%lf",
+	}
 	body := func(f Func) {
-		for _, t := range []Type{ I32, U32, I64, U64, F64, VC, VI, VF } {
+		for _, t := range []Type{I32, U32, I64, U64, F64, VC, VI, VF} {
 			var x []string
 			for _, v := range f.Locs {
 				if v.Type == t {
@@ -237,6 +247,21 @@ func (m Module) C(ww io.Writer) {
 			if x != nil {
 				fmt.Fprintf(w, "%s %s;\n", typ(t), strings.Join(x, ", "))
 			}
+		}
+		if false {
+			w.Write([]byte(`printf("%s`))
+			for _, x := range f.Args {
+				s, o := form[x.Type]
+				if !o {
+					panic("type: " + string(x.Type))
+				}
+				w.Write([]byte("," + s))
+			}
+			w.Write([]byte(`\n", __func__`))
+			for _, x := range f.Args {
+				fmt.Fprintf(w, ", %s", x.Name)
+			}
+			fmt.Fprintf(w, ");\n")
 		}
 		ex(f.Body)
 	}
@@ -254,7 +279,7 @@ func (m Module) C(ww io.Writer) {
 				}
 				a = append(a, s)
 			}
-			fmt.Fprintf(w, "%s %s(%s)", rt, fname(f.Name), strings.Join(a,", "))
+			fmt.Fprintf(w, "%s %s(%s)", rt, fname(f.Name), strings.Join(a, ", "))
 			if dec {
 				fmt.Fprintf(w, ";\n")
 			} else {
@@ -274,7 +299,7 @@ func (m Module) C(ww io.Writer) {
 	}
 	f(true)
 	f(false)
-	
+
 	fmt.Fprintf(w, cmain1[1:])
 	for _, t := range m.Table {
 		for j, s := range t.Names {
@@ -286,7 +311,7 @@ func (m Module) C(ww io.Writer) {
 		s := make([]byte, 2*len(d.Data))
 		hex.Encode(s, []byte(d.Data))
 		b := make([]byte, 2*len(s))
-		for i := 0; i<len(s); i+= 2 {
+		for i := 0; i < len(s); i += 2 {
 			b[2*i+0] = '\\'
 			b[2*i+1] = 'x'
 			b[2*i+2] = s[i]
@@ -303,6 +328,7 @@ type cfmt struct {
 	b *bytes.Buffer
 	w io.Writer
 }
+
 func (c cfmt) Write(b []byte) (int, error) { return c.b.Write(b) }
 func (c cfmt) Flush() {
 	b := c.b.Bytes()
@@ -355,8 +381,8 @@ typedef int8_t   VC V5;
 typedef int32_t  VI V5;
 typedef double   VF V5;
 static void*$fn[#FN];
-static VC $C[1<<12];VI*$I;VF*$F;
-static VC $C2[1<<12];
+static VC $C[1<<24];VI*$I;VF*$F;
+static VC $C2[1<<24];
 static char *$c,*$c2;
 static i32 *$i;
 static i64 *$j;
@@ -365,11 +391,11 @@ static int32_t memorysize_, memorysize2_;
 static int    args_;
 static char **argv_;
 static jmp_buf jb_;
-#define I8(x)  $c[x]
+#define I8(x)  (i32)$c[x]
 #define I32(x) $i[(x)>>2]
 #define I64(x) $j[(x)>>3]
 #define F64(x) $f[(x)>>3]
-#define SetI8(x,y)  $c[x]=(y)
+#define SetI8(x,y)  $c[x]=((int8_t)(y))
 #define SetI32(x,y) $i[(x)>>2]=(y)
 #define SetI64(x,y) $j[(x)>>3]=(y)
 #define SetF64(x,y) $f[(x)>>3]=(y)
