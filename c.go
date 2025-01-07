@@ -18,8 +18,6 @@ func (m Module) C(ww io.Writer) {
 			maxfn = n
 		}
 	}
-	ch := strings.Replace(chead, "#FN", strconv.Itoa(maxfn), 1)
-	w.Write([]byte(ch)[1:])
 
 	typ := func(t Type) string {
 		return string(t)
@@ -38,6 +36,15 @@ func (m Module) C(ww io.Writer) {
 	}
 
 	var ex func(e Expr)
+	decl := make(map[string]bool)
+	var locl map[string]string
+	rename := func(s string) string {
+		if n, o := locl[s]; o {
+			return n
+		}
+		return s
+	}
+
 	em := func(e Expr) {
 		switch e.(type) {
 		case LocalGet, LocalGets, GlobalGet, GlobalGets, Call, CallIndirect, Literal:
@@ -47,6 +54,86 @@ func (m Module) C(ww io.Writer) {
 			ex(e)
 			fmt.Fprintf(w, ")")
 		}
+	}
+	simdcall := func(c Call) bool {
+		if c.Func == "Iota" {
+			fmt.Fprintf(w, "{0,1,2,3,4,5,6,7};")
+			return true
+		}
+		if c.Func == "VI1" {
+			fmt.Fprintf(w, "{1,1,1,1,1,1,1,1};")
+			return true
+		}
+		if c.Func == "VIsplat" {
+			em(c.Args[0])
+			return true
+		}
+		d := map[string]string{
+			"VI.Add": "+", "VF.Add": "+",
+			"VI.Sub": "-", "VF.Sub": "-",
+			"VI.Mul": "*", "VF.Mul": "*",
+			"VI.And":  "&",
+			"VI.Lt_s": "<", "VI.Gt_s": ">", "VI.Eq": "==",
+		}
+		if s, o := d[c.Func]; o {
+			fmt.Fprintf(w, "(")
+			em(c.Args[0])
+			fmt.Fprintf(w, "%s", s)
+			em(c.Args[1])
+			fmt.Fprintf(w, ")")
+			return true
+		}
+		if c.Func == "VF.Hsum" {
+			if l, o := c.Args[0].(LocalGets); o {
+				s := locl[l[0]]
+				fmt.Fprintf(w, "%s[0]+%s[1]+%s[2]+%s[3];", s, s, s, s)
+			} else {
+				panic("VF.Hsum expects localgets")
+			}
+			return true
+		}
+		m := map[string]string{
+			"VI.Min_s":  "__builtin_elementwise_min",
+			"VF.Pmin":   "__builtin_elementwise_min",
+			"VI.Abs":    "__builtin_elementwise_abs",
+			"VF.Abs":    "__builtin_elementwise_abs",
+			"VI.Max_s":  "__builtin_elementwise_max",
+			"VF.Pmax":   "__builtin_elementwise_max",
+			"VI.Hmin_s": "__builtin_reduce_min",
+			"VI.Hmax_s": "__builtin_reduce_min",
+			"VI.Hsum":   "__builtin_reduce_add",
+			"VF.Hmin":   "__builtin_reduce_min",
+			"VF.Hmax":   "__builtin_reduce_max",
+			"VI.Neg":    "-", "VF.Neg": "-",
+			"VF.Sqrt": "VFsqrt",
+		}
+		if s, o := m[c.Func]; o {
+			c.Func = s
+			ex(c)
+			return true
+		}
+		return false
+	}
+	splats := func(v Expr, n int) bool {
+		fmt.Fprintf(w, "{")
+		for i := 0; i < n; i++ {
+			if i > 0 {
+				fmt.Fprintf(w, ",")
+			}
+			ex(v)
+		}
+		fmt.Fprintf(w, "};")
+		return true
+	}
+	splat := func(v Expr) bool {
+		if c, o := v.(Call); o {
+			if c.Func == "VIsplat" {
+				return splats(c.Args[0], 8)
+			} else if c.Func == "VFsplat" {
+				return splats(c.Args[0], 4)
+			}
+		}
+		return false
 	}
 
 	ex = func(e Expr) {
@@ -61,12 +148,17 @@ func (m Module) C(ww io.Writer) {
 				if ant { // &^= => &= ^..
 					mod, tna = "&", "~"
 				}
-				fmt.Fprintf(w, "%s %s= %s", v.Name[i], mod, tna)
+				if decl[v.Name[i]] == false {
+					decl[v.Name[i]] = true
+					fmt.Fprintf(w, "%s ", typ(v.Typs[i]))
+				}
+				fmt.Fprintf(w, "%s %s= %s", rename(v.Name[i]), mod, tna)
 				if len(v.Expr) < len(v.Name) {
 					fmt.Fprintf(w, "0")
 				} else {
 					if tna != "" {
 						em(v.Expr[i])
+					} else if splat(v.Expr[i]) {
 					} else {
 						ex(v.Expr[i])
 					}
@@ -88,6 +180,9 @@ func (m Module) C(ww io.Writer) {
 				fmt.Fprintf(w, "continue%s;\n", s)
 			}
 		case Call:
+			if simdcall(v) {
+				break
+			}
 			fmt.Fprintf(w, "%s(", fname(v.Func))
 			for i := range v.Args {
 				if i > 0 {
@@ -179,12 +274,12 @@ func (m Module) C(ww io.Writer) {
 				fmt.Fprintf(w, "l")
 			}
 		case LocalGet:
-			fmt.Fprintf(w, "%s", v)
+			fmt.Fprintf(w, "%s", locl[string(v)])
 		case LocalGets:
 			if len(v) != 1 {
 				panic("1!=#LocalGets")
 			}
-			fmt.Fprintf(w, "%s", v[0])
+			fmt.Fprintf(w, "%s", locl[v[0]])
 		case Nop:
 			fmt.Fprintf(w, "/*nop*/")
 		case Return:
@@ -206,14 +301,14 @@ func (m Module) C(ww io.Writer) {
 			ex(v.E)
 			fmt.Fprintf(w, ") {\n")
 			for i := range v.Case {
-				fmt.Fprintf(w, "case %d:\n", i)
+				fmt.Fprintf(w, "case %d:{\n", i)
 				ex(v.Case[i])
-				fmt.Fprintf(w, "break;\n")
+				fmt.Fprintf(w, "break;}\n")
 			}
 			if len(v.Def) > 0 {
-				fmt.Fprintf(w, "default:\n")
+				fmt.Fprintf(w, "default:{\n")
 				ex(v.Def)
-				fmt.Fprintf(w, "}\n")
+				fmt.Fprintf(w, "}}\n")
 			}
 		case Unary:
 			fmt.Fprintf(w, "%s", opa(v.Op.Name))
@@ -233,21 +328,66 @@ func (m Module) C(ww io.Writer) {
 		}
 	}
 
+	trimname := func(s string) string {
+		if c := s[len(s)-1]; len(s) > 1 && c >= '0' && c <= '9' {
+			s = s[:len(s)-1]
+		}
+		if c := s[len(s)-1]; len(s) > 1 && c >= '0' && c <= '9' {
+			s = s[:len(s)-1]
+		}
+		return s
+	}
 	form := map[Type]string{
 		I32: "%d", U32: "%u", I64: "%ld", U64: "%lu", F64: "%lf",
 	}
 	body := func(f Func) {
-		for _, t := range []Type{I32, U32, I64, U64, F64, VC, VI, VF} {
-			var x []string
-			for _, v := range f.Locs {
-				if v.Type == t {
-					x = append(x, v.Name)
-				}
-			}
-			if x != nil {
-				fmt.Fprintf(w, "%s %s;\n", typ(t), strings.Join(x, ", "))
+		allg := make(map[string]bool)
+		for _, g := range m.Globals {
+			for i := range g.Name {
+				allg[g.Name[i]] = true
 			}
 		}
+
+		locl = make(map[string]string)
+		for _, v := range f.Args {
+			locl[v.Name] = v.Name
+		}
+		for _, v := range f.Locs {
+			locl[v.Name] = v.Name
+		}
+		for _, v := range f.Locs {
+			if s := trimname(v.Name); s != v.Name {
+				if _, ok := locl[s]; !ok {
+					locl[v.Name] = s
+					locl[s] = s
+				}
+			}
+		}
+
+		decl = make(map[string]bool)
+		for g := range allg {
+			decl[g] = true
+		}
+		for _, v := range f.Locs {
+			decl[v.Name] = false
+		}
+		for _, v := range f.Args {
+			decl[v.Name] = true
+		}
+
+		/*
+			for _, t := range []Type{I32, U32, I64, U64, F64, VC, VI, VF} {
+				var x []string
+				for _, v := range f.Locs {
+					if v.Type == t {
+						x = append(x, v.Name)
+					}
+				}
+				if x != nil {
+					fmt.Fprintf(w, "%s %s;\n", typ(t), strings.Join(x, ", "))
+				}
+			}
+		*/
 		if false {
 			w.Write([]byte(`printf("%s`))
 			for _, x := range f.Args {
@@ -300,11 +440,16 @@ func (m Module) C(ww io.Writer) {
 	f(true)
 	f(false)
 
-	fmt.Fprintf(w, cmain1[1:])
+	ch := strings.Replace(chead, "#FN", strconv.Itoa(maxfn), 1)
+	ww.Write([]byte(ch)[1:])
+
+	w.Flush()
+
+	fmt.Fprintf(ww, cmain1[1:])
 	for _, t := range m.Table {
 		for j, s := range t.Names {
 			i := t.Off + j
-			fmt.Fprintf(w, "$fn[%d]=(void*)%s;\n", i, s)
+			fmt.Fprintf(ww, "$fn[%d]=(void*)%s;\n", i, s)
 		}
 	}
 	for _, d := range m.Data {
@@ -317,11 +462,10 @@ func (m Module) C(ww io.Writer) {
 			b[2*i+2] = s[i]
 			b[2*i+3] = s[1+i]
 		}
-		fmt.Fprintf(w, "memcpy($c+%d,\"%s\",%d);\n", d.Off, string(b), len(d.Data))
+		fmt.Fprintf(ww, "memcpy($c+%d,\"%s\",%d);\n", d.Off, string(b), len(d.Data))
 	}
-	fmt.Fprintf(w, cmain2[1:])
+	fmt.Fprintf(ww, cmain2[1:])
 
-	w.Flush()
 }
 
 type cfmt struct {
@@ -371,7 +515,7 @@ const chead = `
 #define F64max       fmax
 #define F64copysign  copysign
 #define Exit exit
-#define V5 __attribute((vector_size(32),aligned(1)))
+#define V5 __attribute((vector_size(32),aligned(32)))
 typedef  int32_t i32;
 typedef uint32_t u32;
 typedef  int64_t i64;
@@ -399,7 +543,18 @@ static jmp_buf jb_;
 #define SetI32(x,y) $i[(x)>>2]=(y)
 #define SetI64(x,y) $j[(x)>>3]=(y)
 #define SetF64(x,y) $f[(x)>>3]=(y)
+#define VIload(x)    $I[(x)>>7]
+#define VFload(x)    $F[(x)>>8]
+#define VIstore(x,y) $I[(x)>>7]=(y)
+#define VFstore(x,y) $F[(x)>>8]=(y)
+#define VIloadB(x) __builtin_convertvector(*(int8_t __attribute((vector_size(8)))*)&$i[x>>2],VI)
 #define I32B(x)     (int32_t)(x)
+#ifdef __AVX2__
+static VF VFsqrt(VF x){
+ VF r={sqrt(x[0]), sqrt(x[1]), sqrt(x[2]), sqrt(x[3])};
+ return r;
+}
+#endif
 static int32_t Memorysize(void){return memorysize_; }
 static int32_t Memorysize2(void){return memorysize2_;}
 static int32_t Memorygrow(int32_t delta){
