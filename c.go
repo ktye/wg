@@ -135,6 +135,12 @@ func (m Module) C(ww io.Writer) {
 		}
 		return false
 	}
+	selfassign := func(s string, e Expr) bool {
+		if l, o := e.(LocalGets); o && len(l) == 1 && l[0] == s {
+			return true
+		}
+		return false
+	}
 
 	ex = func(e Expr) {
 		switch v := e.(type) {
@@ -143,6 +149,9 @@ func (m Module) C(ww io.Writer) {
 				mod := strings.TrimSuffix(v.Mod, "=")
 				if mod == ":" {
 					mod = ""
+				}
+				if mod == "" && len(v.Expr) == len(v.Name) && selfassign(v.Name[i], v.Expr[i]) {
+					continue
 				}
 				ant, tna := mod == "&^", ""
 				if ant { // &^= => &= ^..
@@ -375,19 +384,6 @@ func (m Module) C(ww io.Writer) {
 			decl[v.Name] = true
 		}
 
-		/*
-			for _, t := range []Type{I32, U32, I64, U64, F64, VC, VI, VF} {
-				var x []string
-				for _, v := range f.Locs {
-					if v.Type == t {
-						x = append(x, v.Name)
-					}
-				}
-				if x != nil {
-					fmt.Fprintf(w, "%s %s;\n", typ(t), strings.Join(x, ", "))
-				}
-			}
-		*/
 		if false {
 			w.Write([]byte(`printf("%s`))
 			for _, x := range f.Args {
@@ -543,10 +539,10 @@ static jmp_buf jb_;
 #define SetI32(x,y) $i[(x)>>2]=(y)
 #define SetI64(x,y) $j[(x)>>3]=(y)
 #define SetF64(x,y) $f[(x)>>3]=(y)
-#define VIload(x)    $I[(x)>>7]
-#define VFload(x)    $F[(x)>>8]
-#define VIstore(x,y) $I[(x)>>7]=(y)
-#define VFstore(x,y) $F[(x)>>8]=(y)
+#define VIload(x)    $I[(x)>>5]
+#define VFload(x)    $F[(x)>>5]
+#define VIstore(x,y) $I[(x)>>5]=(y)
+#define VFstore(x,y) $F[(x)>>5]=(y)
 #define VIloadB(x) __builtin_convertvector(*(int8_t __attribute((vector_size(8)))*)&$i[x>>2],VI)
 #define I32B(x)     (int32_t)(x)
 #ifdef __AVX2__
