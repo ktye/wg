@@ -557,6 +557,20 @@ func (x VF) Hsum() float64 {
 	}
 	return r
 }
+func (x VF) HsumEven() float64 {
+	r := x[0]
+	for i := 2; i < len(x); i+=2 {
+		r += x[i]
+	}
+	return r
+}
+func (x VF) HsumOdd() float64 {
+	r := x[1]
+	for i := 3; i < len(x); i+=2 {
+		r += x[i]
+	}
+	return r
+}
 
 /*
 func (v F4) Replace_lane1(f float64) F4 {

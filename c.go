@@ -88,7 +88,25 @@ func (m Module) C(ww io.Writer) {
 				s := locl[l[0]]
 				fmt.Fprintf(w, "%s[0]+%s[1]+%s[2]+%s[3];", s, s, s, s)
 			} else {
-				panic("VF.Hsum expects localgets")
+				panic("VF.HsumEven expects localgets")
+			}
+			return true
+		}
+		if c.Func == "VF.HsumEven" {
+			if l, o := c.Args[0].(LocalGets); o {
+				s := locl[l[0]]
+				fmt.Fprintf(w, "%s[0]+%s[2];", s, s)
+			} else {
+				panic("VF.HsumEven expects localgets")
+			}
+			return true
+		}
+		if c.Func == "VF.HsumOdd" {
+			if l, o := c.Args[0].(LocalGets); o {
+				s := locl[l[0]]
+				fmt.Fprintf(w, "%s[1]+%s[3];", s, s)
+			} else {
+				panic("VF.HsumOdd expects localgets")
 			}
 			return true
 		}
