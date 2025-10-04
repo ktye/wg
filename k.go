@@ -15,7 +15,6 @@ import (
 
 func (m Module) K(w io.Writer) {
 	var current Func
-	const na int = -1 << 31
 	var C []uint64
 	var D []byte
 	var T []string
@@ -91,11 +90,7 @@ func (m Module) K(w io.Writer) {
 			if j > 0 {
 				w.WriteByte(32)
 			}
-			if i == na {
-				w.WriteString("0N")
-			} else {
-				w.WriteString(strconv.Itoa(i))
-			}
+			w.WriteString(strconv.Itoa(i))
 		}
 		return w.String()
 	}
@@ -181,13 +176,13 @@ func (m Module) K(w io.Writer) {
 				p = push("asn", p, glo, s)
 				p = push(bi(mod), p, 2, typ[v.Typs[0]])
 				if glo == 1 {
-					push("Get", p, na, s)
+					push("Get", p, 0, s)
 				} else {
-					push("get", p, na, s)
+					push("get", p, 0, s)
 				}
 				node(v.Expr[0], p)
 			} else if len(v.Expr) > 1 { // multiple expressions n times: 1 to 1 assignment
-				p = push("stm", p, na, "")
+				p = push("stm", p, 0, "")
 				for i, e := range v.Expr {
 					p1 := push("asn", p, ib(v.Glob[i]), sy(v.Name[i]))
 					node(e, p1)
@@ -203,12 +198,12 @@ func (m Module) K(w io.Writer) {
 			m := map[string]string{"I8": "b", "I32": "i", "I64": "j", "F64": "f", "SetI8": "b", "SetI32": "i", "SetI64": "j", "SetF64": "f"}
 			t := m[v.Func]
 			if t == "" {
-				p = push("cal", p, na, strings.ReplaceAll(v.Func, ".", "")) // later: na->func node
+				p = push("cal", p, 0, strings.ReplaceAll(v.Func, ".", "")) // later: na->func node
 			} else {
 				if strings.HasPrefix(v.Func, "Set") {
-					p = push("sto", p, na, t)
+					p = push("sto", p, 0, t)
 				} else {
-					p = push("lod", p, na, t)
+					p = push("lod", p, 0, t)
 				}
 			}
 			x := len(P)
@@ -230,7 +225,7 @@ func (m Module) K(w io.Writer) {
 			}
 			x := len(P)
 			for _, t := range v.ArgType {
-				push("arg", p, na, typ[t])
+				push("arg", p, 0, typ[t])
 			}
 			if len(v.ArgType) > 1 {
 				if s := mcall(v.a, T[x:], S[x:]); s != "" {
@@ -238,14 +233,14 @@ func (m Module) K(w io.Writer) {
 				}
 			}
 		case Cast:
-			p = push("cst", p, na, typ[v.Dst])
-			push("typ", p, na, typ[v.Src])
+			p = push("cst", p, 0, typ[v.Dst])
+			push("typ", p, 0, typ[v.Src])
 			node(v.Arg, p)
 		case Drop:
-			p = push("drp", p, na, "")
+			p = push("drp", p, 0, "")
 			node(v.Expr.(Call), p) // all children are calls
 		case Nop:
-			p = push("nop", p, na, "")
+			p = push("nop", p, 0, "")
 		case Unary:
 			p = push(un(v.Op.Name), p, 1, typ[v.Op.Type])
 			node(v.X, p)
@@ -256,10 +251,10 @@ func (m Module) K(w io.Writer) {
 		case Literal:
 			push("lit", p, literal(v), typ[v.Type])
 		case GlobalGet:
-			push("Get", p, na, string(v))
+			push("Get", p, 0, string(v))
 		case LocalGet:
 			s := sy(string(v))
-			push("get", p, na, s)
+			push("get", p, 0, s)
 		case GlobalGets:
 			for i := range v {
 				node(GlobalGet(v[i]), p)
@@ -269,13 +264,13 @@ func (m Module) K(w io.Writer) {
 				node(LocalGet(v[i]), p)
 			}
 		case Return:
-			p = push("ret", p, na, rtyp)
+			p = push("ret", p, 0, rtyp)
 			nodes(v, p)
 		case Stmts:
 			if len(v) == 1 {
 				node(v[0], p)
 			} else {
-				p = push("stm", p, na, "")
+				p = push("stm", p, 0, "")
 				for i := range v {
 					node(v[i], p)
 				}
@@ -287,12 +282,12 @@ func (m Module) K(w io.Writer) {
 			}
 			if t != "" {
 				if ret {
-					p = push("ret", p, na, typ[t])
+					p = push("ret", p, 0, typ[t])
 				} else {
 					p = push("asn", p, 0, name) //todo global asn
 				}
 			}
-			p = push("cnd", p, na, typ[t])
+			p = push("cnd", p, 0, typ[t])
 			node(v.If, p)
 			node(th, p)
 			if len(el) > 0 {
@@ -305,7 +300,7 @@ func (m Module) K(w io.Writer) {
 			}
 			if t != "" {
 				if ret {
-					p = push("ret", p, na, typ[t])
+					p = push("ret", p, 0, typ[t])
 				} else {
 					p = push("asn", p, 0, name) //todo global asn
 				}
@@ -368,14 +363,14 @@ func (m Module) K(w io.Writer) {
 	if len(v) > 0 {
 		for _, k := range v {
 			i := m.Imports[k]
-			p := push("imp", root, na, k)
-			push("pkg", p, na, i.Package)
-			push("sym", p, na, sy(i.Func))
+			p := push("imp", root, 0, k)
+			push("pkg", p, 0, i.Package)
+			push("sym", p, 0, sy(i.Func))
 			for _, a := range i.Arg {
-				push("arg", p, na, typ[a])
+				push("arg", p, 0, typ[a])
 			}
 			for _, a := range i.Res {
-				push("res", p, na, typ[a])
+				push("res", p, 0, typ[a])
 			}
 		}
 	}
@@ -392,7 +387,7 @@ func (m Module) K(w io.Writer) {
 				v = "con"
 			}
 			t := a.Typs[i]
-			g := push(v, root, na, s)
+			g := push(v, root, 0, s)
 			l := a.Expr[i].(Literal)
 			l.Type = t // overwrite literal type (which maybe wrong)
 			node(l, g)
@@ -422,15 +417,15 @@ func (m Module) K(w io.Writer) {
 		f.Exported = m.Exports[f.Name] || m.exportAll
 		p := push("fun", root, ib(f.Exported), f.Name)
 		for _, a := range f.Args {
-			ai := push("arg", p, na, typ[a.Type])
+			ai := push("arg", p, 0, typ[a.Type])
 			push("sym", ai, 0, sy(a.Name))
 		}
 		for _, r := range f.Rets {
-			push("res", p, na, typ[r])
+			push("res", p, 0, typ[r])
 		}
 		vars = make(map[string]bool)
 		for _, l := range f.Locs {
-			li := push("loc", p, na, typ[l.Type])
+			li := push("loc", p, 0, typ[l.Type])
 			s := sym(l.Name)
 			push("sym", li, 0, s)
 		}
@@ -438,12 +433,12 @@ func (m Module) K(w io.Writer) {
 		if len(f.Rets) == 1 {
 			rtyp = typ[f.Rets[0]]
 		}
-		b := push("ast", p, na, "")
+		b := push("ast", p, 0, "")
 		for i := range f.Body {
 			node(f.Body[i], b)
 		}
 		if f.Defer != nil {
-			d := push("dfr", p, na, "")
+			d := push("dfr", p, 0, "")
 			node(f.Defer.(Call), d)
 		}
 	}
