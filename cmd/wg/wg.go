@@ -10,6 +10,7 @@ import (
 
 func main() {
 	a := os.Args[1:]
+	A := false
 	f := false
 	k := false
 	c := false
@@ -31,6 +32,9 @@ func main() {
 	if a0() == "-nosys" { // wasm-only, no system interface (and no imports)
 		wg.NoSys, a = true, a[1:]
 	}
+	if a0() == "-a" {
+		A, a = true, a[1:]
+	}
 	if a0() == "-f" { // f77
 		f, a = true, a[1:]
 	}
@@ -46,6 +50,8 @@ func main() {
 	m := wg.Parse(a[0])
 	if f {
 		f77.F(os.Stdout, m)
+	} else if A {
+		m.A(os.Stdout)
 	} else if k {
 		m.K(os.Stdout)
 	} else if c {
