@@ -38,8 +38,7 @@ func (m Module) A(w io.Writer) {
 	}
 
 	ops := map[string]string{
-		"+": "add",
-		"*": "mul",
+		"+": "add", "*": "mul", "-": "sub",
 	}
 	aso := func(x string) bool { return x == "+" || x == "*" }
 	free := func(x int) { 
@@ -175,6 +174,26 @@ func (m Module) A(w io.Writer) {
 			}
 			O(l1+":")
 			return -1
+		case Switch:
+			c := node(v.E)
+			l := make([]string, len(v.Case))
+			e := lab("ec")
+			for i := range v.Case {
+				I("cmp",ri(c),strconv.Itoa(i))
+				l[i] = lab("cs")
+				I1("je", l[i])
+			}
+			d := lab("def")
+			I1("jmp",d)
+			for i, c := range v.Case {
+				O(l[i]+":")
+				node(c)
+				I1("jmp",e)
+			}
+			O(d+":")
+			node(v.Def)
+			O(e+":")
+			return -1
 			/*
 		case Call:
 			m := map[string]string{"I8": "b", "I32": "i", "I64": "j", "F64": "f", "SetI8": "b", "SetI32": "i", "SetI64": "j", "SetF64": "f"}
@@ -290,6 +309,9 @@ func (m Module) A(w io.Writer) {
 		return -1
 	}
 
+	O(";k")
+	O("global start")
+	O("_start:")
 	// Funcs
 	for _, f := range m.Funcs {
 		l, c, r := loc, col, reg
