@@ -10,6 +10,7 @@ import (
 type Type string
 type Emitter interface {
 	wat(io.Writer)
+	walk(func(e Emitter) bool)
 	// c(io.Writer)
 }
 

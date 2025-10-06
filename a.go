@@ -8,22 +8,22 @@ import (
 )
 
 func (m Module) A(w io.Writer) {
-	O := func(s string) int { w.Write([]byte(s+"\n")); return 0 }
-	I := func(a,b,c string) { w.Write([]byte(" "+a+" "+b+","+c+"\n")) }
-	I1 := func(a,b string) { w.Write([]byte(" "+a+" "+b+"\n")) }
-	ri := func(i int) string { return "r"+strconv.Itoa(i) }
-	com := func(s string) string { return " ;"+s }
+	O := func(s string) int { w.Write([]byte(s + "\n")); return 0 }
+	I := func(a, b, c string) { w.Write([]byte(" " + a + " " + b + "," + c + "\n")) }
+	I1 := func(a, b string) { w.Write([]byte(" " + a + " " + b + "\n")) }
+	ri := func(i int) string { return "r" + strconv.Itoa(i) }
+	com := func(s string) string { return " ;" + s }
 	loc := make(map[string]int)
 	col := make(map[int]string)
 	reg := make([]bool, 16)
 	labels := make(map[string]int)
 	lab := func(s string) string {
 		i := labels[s]
-		labels[s] = 1+i
-		return "."+s+strconv.Itoa(i)
+		labels[s] = 1 + i
+		return "." + s + strconv.Itoa(i)
 	}
 	cmp := func(op string, neg bool) string {
-		a := []string{">",">=", "==", "!=", "<=", "<"}
+		a := []string{">", ">=", "==", "!=", "<=", "<"}
 		b := []string{"g", "ge", "e", "ne", "le", "l"}
 		c := []string{"le", "l", "ne", "e", "g", "ge"}
 		if neg {
@@ -31,19 +31,19 @@ func (m Module) A(w io.Writer) {
 		}
 		for i, o := range a {
 			if o == op {
-				return "j"+b[i]
+				return "j" + b[i]
 			}
 		}
-		panic("cmp: "+op)
+		panic("cmp: " + op)
 	}
 
 	ops := map[string]string{
-		"+": "add", "*": "mul", "-": "sub",
+		"+": "add", "*": "imul", "-": "sub",
 	}
 	aso := func(x string) bool { return x == "+" || x == "*" }
-	free := func(x int) { 
+	free := func(x int) {
 		if col[x] == "" {
-			reg[x] = false 
+			reg[x] = false
 		}
 	}
 	alloc := func() int {
@@ -61,7 +61,7 @@ func (m Module) A(w io.Writer) {
 		case Stmts:
 			for i, x := range v {
 				node(x)
-				if i < len(v) - 1 {
+				if i < len(v)-1 {
 					O("")
 				}
 			}
@@ -85,7 +85,7 @@ func (m Module) A(w io.Writer) {
 			y := node(v.Y)
 			s := ops[v.Op.Name]
 			if s == "" {
-				s = "op("+v.Op.Name+")"
+				s = "op(" + v.Op.Name + ")"
 			}
 			free(x)
 			free(y)
@@ -94,10 +94,10 @@ func (m Module) A(w io.Writer) {
 				if r == y && aso(v.Op.Name) {
 					x, y = y, x
 				} else {
-					I("mov",ri(r),ri(x))
+					I("mov", ri(r), ri(x))
 				}
 			}
-			I(s,ri(r),ri(y))
+			I(s, ri(r), ri(y))
 			return r
 		case Unary:
 			x := node(v.X)
@@ -131,10 +131,10 @@ func (m Module) A(w io.Writer) {
 					panic("nyi:global-modified-assign")
 				}
 				if l, o := v.Expr[0].(Literal); o {
-					I(ops[mod],ri(loc[v.Name[0]]),l.Value+com(v.Name[0]))
+					I(ops[mod], ri(loc[v.Name[0]]), l.Value+com(v.Name[0]))
 					return -1
 				}
-				I(ops[mod],ri(loc[v.Name[0]]),ri(node(v.Expr[0]))+com(v.Name[0]))
+				I(ops[mod], ri(loc[v.Name[0]]), ri(node(v.Expr[0]))+com(v.Name[0]))
 				return -1
 			} else if len(v.Expr) > 1 { // multiple expressions n times: 1 to 1 assignment
 				panic("multi-assign")
@@ -151,7 +151,7 @@ func (m Module) A(w io.Writer) {
 			}
 		case Literal:
 			i := alloc()
-			I("mov",ri(i),v.Value) //v.Type
+			I("mov", ri(i), v.Value) //v.Type
 			return i
 		case If:
 			b := v.If.(Binary)
@@ -169,138 +169,138 @@ func (m Module) A(w io.Writer) {
 			node(v.Then)
 			if len(v.Else) > 0 {
 				I1("jmp", fi)
-				O(el+":")
+				O(el + ":")
 				node(v.Else)
 			}
-			O(l1+":")
+			O(l1 + ":")
 			return -1
 		case Switch:
 			c := node(v.E)
 			l := make([]string, len(v.Case))
 			e := lab("ec")
 			for i := range v.Case {
-				I("cmp",ri(c),strconv.Itoa(i))
+				I("cmp", ri(c), strconv.Itoa(i))
 				l[i] = lab("cs")
 				I1("je", l[i])
 			}
 			d := lab("def")
-			I1("jmp",d)
+			I1("jmp", d)
 			for i, c := range v.Case {
-				O(l[i]+":")
+				O(l[i] + ":")
 				node(c)
-				I1("jmp",e)
+				I1("jmp", e)
 			}
-			O(d+":")
+			O(d + ":")
 			node(v.Def)
-			O(e+":")
+			O(e + ":")
 			return -1
 			/*
-		case Call:
-			m := map[string]string{"I8": "b", "I32": "i", "I64": "j", "F64": "f", "SetI8": "b", "SetI32": "i", "SetI64": "j", "SetF64": "f"}
-			t := m[v.Func]
-			if t == "" {
-				p = push("cal", p, 0, strings.ReplaceAll(v.Func, ".", "")) // later: na->func node
-			} else {
-				if strings.HasPrefix(v.Func, "Set") {
-					p = push("sto", p, 0, t)
-				} else {
-					p = push("lod", p, 0, t)
-				}
-			}
-			x := len(P)
-			nodes(v.Args, p)
-			if t == "" && len(v.Args) > 1 {
-				if s := mcall(v.a, T[x:], S[x:]); s != "" {
-					mcalls[s] = true
-				}
-			}
-		case CallIndirect:
-			rt := ""
-			if len(v.ResType) == 1 {
-				rt = typ[v.ResType[0]]
-			}
-			p = push("cli", p, len(v.Args), rt)
-			node(v.Func, p)
-			for _, a := range v.Args {
-				node(a, p)
-			}
-			x := len(P)
-			for _, t := range v.ArgType {
-				push("arg", p, 0, typ[t])
-			}
-			if len(v.ArgType) > 1 {
-				if s := mcall(v.a, T[x:], S[x:]); s != "" {
-					mcalls[s+"(indirect)"] = true
-				}
-			}
-		case Cast:
-			p = push("cst", p, 0, typ[v.Dst])
-			push("typ", p, 0, typ[v.Src])
-			node(v.Arg, p)
-		case If:
-			th, el, name, t, ret := v.value()
-			if ret {
-				t = current.Rets[0]
-			}
-			if t != "" {
-				if ret {
-					p = push("ret", p, 0, typ[t])
-				} else {
-					p = push("asn", p, 0, name) //todo global asn
-				}
-			}
-			p = push("cnd", p, 0, typ[t])
-			node(v.If, p)
-			node(th, p)
-			if len(el) > 0 {
-				node(el, p)
-			}
-		case Switch:
-			cs, de, name, t, ret := v.value()
-			if ret {
-				t = current.Rets[0]
-			}
-			if t != "" {
-				if ret {
-					p = push("ret", p, 0, typ[t])
-				} else {
-					p = push("asn", p, 0, name) //todo global asn
-				}
-			}
-			if len(de) == 0 {
-				panic("switch no-default?")
-			}
-			p = push("swc", p, ib(len(de) > 0), typ[t])
-			node(v.E, p)
-			for _, n := range cs {
-				node(n, p)
-			}
-			if len(de) > 0 {
-				node(de, p)
-			}
-		case For:
-			simple := 0
-			if v.Simple {
-				simple = 1
-			}
-			p = push("for", p, simple, v.Label)
-			if v.Cond != nil {
-				node(v.Cond, p)
-			} else {
-				node(Nop{}, p)
-			}
-			if v.Post != nil {
-				node(v.Post, p)
-			} else {
-				node(Nop{}, p)
-			}
-			node(v.Body, p)
-		case Branch:
-			brk := 0
-			if v.Break {
-				brk = 1
-			}
-			p = push("jmp", p, brk, v.Label)
+				case Call:
+					m := map[string]string{"I8": "b", "I32": "i", "I64": "j", "F64": "f", "SetI8": "b", "SetI32": "i", "SetI64": "j", "SetF64": "f"}
+					t := m[v.Func]
+					if t == "" {
+						p = push("cal", p, 0, strings.ReplaceAll(v.Func, ".", "")) // later: na->func node
+					} else {
+						if strings.HasPrefix(v.Func, "Set") {
+							p = push("sto", p, 0, t)
+						} else {
+							p = push("lod", p, 0, t)
+						}
+					}
+					x := len(P)
+					nodes(v.Args, p)
+					if t == "" && len(v.Args) > 1 {
+						if s := mcall(v.a, T[x:], S[x:]); s != "" {
+							mcalls[s] = true
+						}
+					}
+				case CallIndirect:
+					rt := ""
+					if len(v.ResType) == 1 {
+						rt = typ[v.ResType[0]]
+					}
+					p = push("cli", p, len(v.Args), rt)
+					node(v.Func, p)
+					for _, a := range v.Args {
+						node(a, p)
+					}
+					x := len(P)
+					for _, t := range v.ArgType {
+						push("arg", p, 0, typ[t])
+					}
+					if len(v.ArgType) > 1 {
+						if s := mcall(v.a, T[x:], S[x:]); s != "" {
+							mcalls[s+"(indirect)"] = true
+						}
+					}
+				case Cast:
+					p = push("cst", p, 0, typ[v.Dst])
+					push("typ", p, 0, typ[v.Src])
+					node(v.Arg, p)
+				case If:
+					th, el, name, t, ret := v.value()
+					if ret {
+						t = current.Rets[0]
+					}
+					if t != "" {
+						if ret {
+							p = push("ret", p, 0, typ[t])
+						} else {
+							p = push("asn", p, 0, name) //todo global asn
+						}
+					}
+					p = push("cnd", p, 0, typ[t])
+					node(v.If, p)
+					node(th, p)
+					if len(el) > 0 {
+						node(el, p)
+					}
+				case Switch:
+					cs, de, name, t, ret := v.value()
+					if ret {
+						t = current.Rets[0]
+					}
+					if t != "" {
+						if ret {
+							p = push("ret", p, 0, typ[t])
+						} else {
+							p = push("asn", p, 0, name) //todo global asn
+						}
+					}
+					if len(de) == 0 {
+						panic("switch no-default?")
+					}
+					p = push("swc", p, ib(len(de) > 0), typ[t])
+					node(v.E, p)
+					for _, n := range cs {
+						node(n, p)
+					}
+					if len(de) > 0 {
+						node(de, p)
+					}
+				case For:
+					simple := 0
+					if v.Simple {
+						simple = 1
+					}
+					p = push("for", p, simple, v.Label)
+					if v.Cond != nil {
+						node(v.Cond, p)
+					} else {
+						node(Nop{}, p)
+					}
+					if v.Post != nil {
+						node(v.Post, p)
+					} else {
+						node(Nop{}, p)
+					}
+					node(v.Body, p)
+				case Branch:
+					brk := 0
+					if v.Break {
+						brk = 1
+					}
+					p = push("jmp", p, brk, v.Label)
 			*/
 		default:
 			_ = v
@@ -324,10 +324,12 @@ func (m Module) A(w io.Writer) {
 			loc[a.Name] = i
 			col[i] = a.Name
 			reg[i] = true
-			s += " "+strconv.Itoa(i) + ":" + a.Name
+			s += " " + strconv.Itoa(i) + ":" + a.Name
 		}
-		O(f.Name+":  ;"+s)
+		O(f.Name + ":  ;" + s)
+		Walk(f.Body, func(e Emitter) bool { fmt.Printf("walk %T\n", e); return true })
 		node(f.Body)
+
 		loc, col, reg = l, c, r
 	}
 }
