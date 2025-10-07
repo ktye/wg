@@ -9,6 +9,7 @@ func (x Stmts) walk(f func(e Emitter) bool) {
 		}
 	}
 }
+
 func (x Nop) walk(f func(e Emitter) bool) { f(x) }
 func (x Return) walk(f func(e Emitter) bool) {
 	if f(x) {
@@ -28,10 +29,8 @@ func (x Unary) walk(f func(e Emitter) bool) {
 		x.X.walk(f)
 	}
 }
-func (x LocalGets) walk(f func(e Emitter) bool)  { f(x) }
-func (x LocalGet) walk(f func(e Emitter) bool)   { f(x) }
-func (x GlobalGets) walk(f func(e Emitter) bool) { f(x) }
-func (x GlobalGet) walk(f func(e Emitter) bool)  { f(x) }
+func (x LocalGet) walk(f func(e Emitter) bool)  { f(x) }
+func (x GlobalGet) walk(f func(e Emitter) bool) { f(x) }
 func (x Assign) walk(f func(e Emitter) bool) {
 	if f(x) {
 		for i := range x.Expr {

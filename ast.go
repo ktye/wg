@@ -10,7 +10,7 @@ import (
 type Type string
 type Emitter interface {
 	wat(io.Writer)
-	walk(func(e Emitter) bool)
+	walk(func(Emitter) bool)
 	// c(io.Writer)
 }
 
@@ -119,10 +119,8 @@ type Literal struct {
 	Type  Type
 	Value string
 }
-type GlobalGet string    //Expr
-type GlobalGets []string //Expr
-type LocalGet string     //Expr
-type LocalGets []string  //Expr (struct)
+type GlobalGet string //Expr
+type LocalGet string  //Expr
 type Op struct {
 	Name string
 	Type Type

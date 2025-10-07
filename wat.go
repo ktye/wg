@@ -223,17 +223,7 @@ func (r Drop) wat(w io.Writer) {
 }
 func (n Nop) wat(w io.Writer)       {}
 func (l GlobalGet) wat(w io.Writer) { fmt.Fprintf(w, "global.get $%s\n", l) }
-func (l GlobalGets) wat(w io.Writer) {
-	for i := range l {
-		fmt.Fprintf(w, "global.get $%s\n", l[i])
-	}
-}
-func (l LocalGet) wat(w io.Writer) { fmt.Fprintf(w, "local.get $%s\n", l) }
-func (l LocalGets) wat(w io.Writer) {
-	for i := range l {
-		fmt.Fprintf(w, "local.get $%s\n", l[i])
-	}
-}
+func (l LocalGet) wat(w io.Writer)  { fmt.Fprintf(w, "local.get $%s\n", l) }
 func (u Unary) wat(w io.Writer) {
 	s := string(u.Op.Type) + u.Op.Name
 	op, ok := wasmops[s]

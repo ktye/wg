@@ -255,14 +255,6 @@ func (m Module) K(w io.Writer) {
 		case LocalGet:
 			s := sy(string(v))
 			push("get", p, 0, s)
-		case GlobalGets:
-			for i := range v {
-				node(GlobalGet(v[i]), p)
-			}
-		case LocalGets:
-			for i := range v {
-				node(LocalGet(v[i]), p)
-			}
 		case Return:
 			p = push("ret", p, 0, rtyp)
 			nodes(v, p)

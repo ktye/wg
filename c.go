@@ -47,7 +47,7 @@ func (m Module) C(ww io.Writer) {
 
 	em := func(e Expr) {
 		switch e.(type) {
-		case LocalGet, LocalGets, GlobalGet, GlobalGets, Call, CallIndirect, Literal:
+		case LocalGet, GlobalGet, Call, CallIndirect, Literal:
 			ex(e)
 		default:
 			fmt.Fprintf(w, "(")
@@ -84,8 +84,8 @@ func (m Module) C(ww io.Writer) {
 			return true
 		}
 		if c.Func == "VF.Hsum" {
-			if l, o := c.Args[0].(LocalGets); o {
-				s := locl[l[0]]
+			if l, o := c.Args[0].(LocalGet); o {
+				s := locl[string(l)]
 				fmt.Fprintf(w, "%s[0]+%s[1]+%s[2]+%s[3];", s, s, s, s)
 			} else {
 				panic("VF.HsumEven expects localgets")
@@ -93,8 +93,8 @@ func (m Module) C(ww io.Writer) {
 			return true
 		}
 		if c.Func == "VF.HsumEven" {
-			if l, o := c.Args[0].(LocalGets); o {
-				s := locl[l[0]]
+			if l, o := c.Args[0].(LocalGet); o {
+				s := locl[string(l)]
 				fmt.Fprintf(w, "%s[0]+%s[2];", s, s)
 			} else {
 				panic("VF.HsumEven expects localgets")
@@ -102,8 +102,8 @@ func (m Module) C(ww io.Writer) {
 			return true
 		}
 		if c.Func == "VF.HsumOdd" {
-			if l, o := c.Args[0].(LocalGets); o {
-				s := locl[l[0]]
+			if l, o := c.Args[0].(LocalGet); o {
+				s := locl[string(l)]
 				fmt.Fprintf(w, "%s[1]+%s[3];", s, s)
 			} else {
 				panic("VF.HsumOdd expects localgets")
@@ -154,7 +154,7 @@ func (m Module) C(ww io.Writer) {
 		return false
 	}
 	selfassign := func(s string, e Expr) bool {
-		if l, o := e.(LocalGets); o && len(l) == 1 && l[0] == s {
+		if l, o := e.(LocalGet); o && string(l) == s {
 			return true
 		}
 		return false
@@ -274,11 +274,6 @@ func (m Module) C(ww io.Writer) {
 			}
 		case GlobalGet:
 			fmt.Fprintf(w, "%s", v)
-		case GlobalGets:
-			if len(v) != 1 {
-				panic("1!=#GlobalGets")
-			}
-			fmt.Fprintf(w, "%s", v[0])
 		case If:
 			fmt.Fprintf(w, "if(")
 			ex(v.If)
@@ -302,11 +297,6 @@ func (m Module) C(ww io.Writer) {
 			}
 		case LocalGet:
 			fmt.Fprintf(w, "%s", locl[string(v)])
-		case LocalGets:
-			if len(v) != 1 {
-				panic("1!=#LocalGets")
-			}
-			fmt.Fprintf(w, "%s", locl[v[0]])
 		case Nop:
 			fmt.Fprintf(w, "/*nop*/")
 		case Return:

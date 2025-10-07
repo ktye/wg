@@ -374,7 +374,7 @@ func (m *Module) parseStmt(st ast.Stmt, f *For) Stmt {
 			if c.Func != "Catch" {
 				panic(position(v) + ":defer function must be 'Catch'")
 			}
-			m.current.Defer = Call{Func: string(c.Args[0].(GlobalGets)[0]), a: v}
+			m.current.Defer = Call{Func: string(c.Args[0].(GlobalGet)), a: v}
 		}
 		return Nop{}
 	default:
@@ -848,10 +848,14 @@ func (m *Module) parseGets(a ast.Node) Expr {
 			return Literal{I32, "1"}
 		}
 	}
+	r := m.parseIdents(a)
+	if len(r) != 1 {
+		panic(position(a) + ": get multiple")
+	}
 	if isglobal(a) {
-		return GlobalGets(m.parseIdents(a))
+		return GlobalGet(r[0])
 	} else {
-		return LocalGets(m.parseIdents(a))
+		return LocalGet(r[0])
 	}
 }
 func (m *Module) parseExpr(a ast.Expr) Expr {

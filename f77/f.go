@@ -327,12 +327,8 @@ func emit(x wg.Emitter) {
 		unary(v)
 	case wg.LocalGet:
 		localget(v)
-	case wg.LocalGets:
-		localgets(v)
 	case wg.GlobalGet:
 		globalget(v)
-	case wg.GlobalGets:
-		globalgets(v)
 	case wg.Drop:
 		drop(v)
 	case wg.Call:
@@ -497,11 +493,6 @@ func localget(l wg.LocalGet) {
 	get[loc(string(l))] = true
 	stk = append(stk, loc(string(l)))
 }
-func localgets(l wg.LocalGets) {
-	for _, s := range l {
-		emit(wg.LocalGet(s))
-	}
-}
 func globalget(g wg.GlobalGet) {
 	if s, o := con[string(g)]; o {
 		push(s)
@@ -510,11 +501,6 @@ func globalget(g wg.GlobalGet) {
 	s := sym(string(g))
 	glo[s] = true
 	stk = append(stk, s)
-}
-func globalgets(g wg.GlobalGets) {
-	for _, gg := range g {
-		globalget(wg.GlobalGet(gg))
-	}
 }
 func drop(d wg.Drop) {
 	emit(d.Expr)
@@ -780,12 +766,6 @@ func multiresult(e []wg.Expr, origfunc string) (args []string, ismulti bool) {
 func globalargs(a wg.Expr) bool { // globals may be mutated, make a copy before call
 	if _, o := a.(wg.GlobalGet); o {
 		return globalarg(a)
-	}
-	if g, o := a.(wg.GlobalGets); o {
-		if len(g) == 1 {
-			return globalarg(wg.GlobalGet(g[0]))
-		}
-		panic("call with multiple global arguments nyi")
 	}
 	return false
 }
@@ -1054,12 +1034,13 @@ func do(f wg.For) {
 	fmt.Fprintf(w, ":%d:CONTINUE\n", l+5) // target for break
 }
 
-/* this fails for
-   for{
-   	for{
-	}
-	if() { break } // label the outer for and "break L"
-   }
+/*
+	 this fails for
+	   for{
+	   	for{
+		}
+		if() { break } // label the outer for and "break L"
+	   }
 */
 func branch(b wg.Branch) { // break/continue
 	l := 10 * len(lab)
@@ -1421,7 +1402,7 @@ func ftab(mod wg.Module) ([]byte, []byte) { // one dispatch function per signatu
 	return []byte(d), buf.Bytes()
 }
 
-//func dispatch(mod wg.Module, sig string, v []int, f wg.Func, max int, itab map[int]string, sigt map[string]string) { // emit dispatch function for sig
+// func dispatch(mod wg.Module, sig string, v []int, f wg.Func, max int, itab map[int]string, sigt map[string]string) { // emit dispatch function for sig
 func dispatch(sig string, v []int, names []string, f wg.Func, max int) {
 	s := addsym(sig, _sym, sym_)
 	reserved[s] = true

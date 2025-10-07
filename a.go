@@ -11,11 +11,17 @@ func (m Module) A(w io.Writer) {
 	O := func(s string) int { w.Write([]byte(s + "\n")); return 0 }
 	I := func(a, b, c string) { w.Write([]byte(" " + a + " " + b + "," + c + "\n")) }
 	I1 := func(a, b string) { w.Write([]byte(" " + a + " " + b + "\n")) }
-	ri := func(i int) string { return "r" + strconv.Itoa(i) }
+	ri := func(i int) string {
+		if i < 0 {
+			return "#" + strconv.Itoa(-i-1)
+		} else {
+			return "$" + strconv.Itoa(i)
+		}
+	}
 	com := func(s string) string { return " ;" + s }
-	loc := make(map[string]int)
-	col := make(map[int]string)
-	reg := make([]bool, 16)
+	var tmp int
+	var loc map[string]int
+	var col map[int]string
 	labels := make(map[string]int)
 	lab := func(s string) string {
 		i := labels[s]
@@ -41,19 +47,7 @@ func (m Module) A(w io.Writer) {
 		"+": "add", "*": "imul", "-": "sub",
 	}
 	aso := func(x string) bool { return x == "+" || x == "*" }
-	free := func(x int) {
-		if col[x] == "" {
-			reg[x] = false
-		}
-	}
-	alloc := func() int {
-		for i, r := range reg {
-			if !r {
-				return i
-			}
-		}
-		panic("register-overflow")
-	}
+	alloc := func() (r int) { r = tmp; tmp++; return r }
 
 	var node func(e Emitter) int
 	node = func(e Emitter) int {
@@ -66,7 +60,7 @@ func (m Module) A(w io.Writer) {
 				}
 			}
 		case Drop:
-			free(node(v.Expr))
+			node(v.Expr)
 			return -1
 		case Nop:
 			return -1
@@ -87,8 +81,6 @@ func (m Module) A(w io.Writer) {
 			if s == "" {
 				s = "op(" + v.Op.Name + ")"
 			}
-			free(x)
-			free(y)
 			r := alloc()
 			if r != x {
 				if r == y && aso(v.Op.Name) {
@@ -101,7 +93,6 @@ func (m Module) A(w io.Writer) {
 			return r
 		case Unary:
 			x := node(v.X)
-			free(x)
 			r := alloc()
 			s := []string{"neg"}[strings.Index("-", v.Op.Name)]
 			if r != x {
@@ -109,13 +100,6 @@ func (m Module) A(w io.Writer) {
 			}
 			I1(s, ri(r))
 			return r
-		case LocalGets:
-			if len(v) == 1 {
-				return node(LocalGet(v[0]))
-			} else {
-				fmt.Printf("%v", v)
-				panic("local-gets")
-			}
 		case LocalGet:
 			return loc[string(v)]
 		case Assign:
@@ -144,7 +128,6 @@ func (m Module) A(w io.Writer) {
 				return -1
 			}
 			x := node(v.Expr[0])
-			free(x)
 			r := loc[v.Name[0]]
 			if r != x {
 				I("mov", ri(r), ri(x)+com(v.Name[0]))
@@ -314,22 +297,17 @@ func (m Module) A(w io.Writer) {
 	O("_start:")
 	// Funcs
 	for _, f := range m.Funcs {
-		l, c, r := loc, col, reg
 		loc = make(map[string]int)
 		col = make(map[int]string)
-		reg = make([]bool, 16)
+		tmp = 0
 		labels = make(map[string]int)
 		s := ""
 		for i, a := range f.Args {
-			loc[a.Name] = i
+			loc[a.Name] = -1 - i
 			col[i] = a.Name
-			reg[i] = true
 			s += " " + strconv.Itoa(i) + ":" + a.Name
 		}
 		O(f.Name + ":  ;" + s)
-		Walk(f.Body, func(e Emitter) bool { fmt.Printf("walk %T\n", e); return true })
 		node(f.Body)
-
-		loc, col, reg = l, c, r
 	}
 }
